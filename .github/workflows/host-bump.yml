@@ -1,0 +1,89 @@
+name: Host bump
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack (pins pnpm from package.json)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump host pins to latest
+        id: bump
+        run: |
+          node scripts/bump-host.mjs --latest
+          echo "version=$(cat scripts/host.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --name-only > /tmp/changed-files.txt
+          fi
+
+      - name: Install with updated pins
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run tests
+        id: test
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm test 2>&1 | tee /tmp/test-output.txt
+        continue-on-error: true
+
+      - name: Build PR title and body
+        if: steps.diff.outputs.changed == 'true'
+        id: pr
+        run: |
+          version="${{ steps.bump.outputs.version }}"
+          {
+            echo "Bumps \`@deepseek-ai/*\` pins to \`$version\`."
+            echo
+            echo "Changed files:"
+            sed 's/^/- /' /tmp/changed-files.txt
+            echo
+            if [ "${{ steps.test.outcome }}" = "success" ]; then
+              echo "Tests: passing (\`pnpm test\`)."
+            else
+              echo "Tests: FAILING. Last 50 lines of \`pnpm test\`:"
+              echo '```'
+              tail -n 50 /tmp/test-output.txt
+              echo '```'
+            fi
+          } > /tmp/pr-body.txt
+          if [ "${{ steps.test.outcome }}" = "success" ]; then
+            echo "title=host: bump @deepseek-ai/dsh pins to $version" >> "$GITHUB_OUTPUT"
+          else
+            echo "title=host: $version BREAKS tests" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "host: bump @deepseek-ai/dsh pins to ${{ steps.bump.outputs.version }}"
+          branch: host-bump/${{ steps.bump.outputs.version }}
+          title: ${{ steps.pr.outputs.title }}
+          body-path: /tmp/pr-body.txt
+          labels: host-bump

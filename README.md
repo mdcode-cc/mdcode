@@ -90,6 +90,18 @@ candidate — written and test-verified against the harness, not yet submitted u
 - See `docs/DESIGN.md` §6 for the full list of Claude Code features consciously not ported in v1,
   and why.
 
+## CI and host upgrades
+
+CI (`.github/workflows/ci.yml`) runs `pnpm install --frozen-lockfile` and `pnpm test` on every
+push and PR to `main`, plus a non-blocking check for a newer host release. A daily scheduled
+workflow (`.github/workflows/host-bump.yml`, also triggerable by hand) runs
+`node scripts/bump-host.mjs --latest`, reinstalls and re-runs the tests, and — only if any pin
+changed — opens a PR with the result; it never merges anything itself, and a host bump that
+breaks the tests still gets a PR, titled to say so, with the failing test output attached. PR
+creation by Actions requires the repo setting "Allow GitHub Actions to create pull requests"
+(Settings → Actions → General); do the same bump locally with
+`node scripts/bump-host.mjs --latest && pnpm install && pnpm test`.
+
 ## Contributing / upstream
 
 `docs/upstream/` holds a draft patch against the DeepSeek Harness itself, adding
