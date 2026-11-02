@@ -41,8 +41,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 
 3. **Install the six `@mdcode-cc/*` packages into the `cc` profile.**
 
-   **Once `0.1.1` is on npm** (not yet published — this is the intended route, not the verified
-   one):
+   **From npm** (`0.1.1`, verified: a clean install into a scratch profile composed and activated on a real run):
 
    ```
    git clone https://github.com/mdcode-cc/mdcode && cd mdcode
@@ -51,7 +50,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
      @mdcode-cc/dsh-hooks-approval
    ```
 
-   **Today**, before that publish, the verified route is a git checkout with `link:` deps:
+   **From a git checkout** (for development, `link:` deps into this clone):
 
    ```
    git clone https://github.com/mdcode-cc/mdcode && cd mdcode && pnpm install
