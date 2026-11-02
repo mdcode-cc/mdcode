@@ -9,7 +9,7 @@
  * "prompt section ... is already registered" (persona) and the matching
  * "tool:<name> ... already registered" for every `inheritPlugins` row. This
  * reproduces identically with `inheritPlugins: []`, with all four
- * `@markishh` rows disabled, and is NOT specific to the bare persona row
+ * `@mdcode-cc` rows disabled, and is NOT specific to the bare persona row
  * shape: wrapping it in `{name:'cordis:group', group:true,
  * isolate:{systemPrompt:true}}` was tried and reverted — it does not fix
  * the collision (still "already registered" on re-test) and risks

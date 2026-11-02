@@ -75,7 +75,7 @@
 #     the scoped one the way a "mixed Web+TUI" profile would.
 # Both failures are properties of mounting ANY of the five bundled presets in
 # a bare TUI-only profile with a real registry — reproduced identically with
-# every @markishh row below disabled in turn, because none of those rows
+# every @mdcode-cc row below disabled in turn, because none of those rows
 # ever touch `persona`, `tool-subagent`, or a preset mount at all.
 #
 # `dsh --profile dsh-tui` never hits this: it has no
@@ -267,7 +267,7 @@
     # added here that publishes a service.
     - id: cc-agents-md
       name: '@mdcode-cc/dsh-agents-md'
-      disabled: false  # unrelated to any @markishh row (see section 3 header above); enabled.
+      disabled: false  # unrelated to any @mdcode-cc row (see section 3 header above); enabled.
       config:
         userDir: '~/.claude/agents'
         projectDirName: '.claude/agents'
