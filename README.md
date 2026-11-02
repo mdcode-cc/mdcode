@@ -15,6 +15,79 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 - Node >= 22
 - pnpm
 
+## Quick start on a new machine
+
+1. **Install the harness.**
+
+   ```
+   npm install -g @deepseek-ai/dsh@$(cat scripts/host.version)
+   ```
+
+   Check it: `dsh --version` should print the same version as `scripts/host.version`.
+
+2. **Export your DeepSeek API key.**
+
+   ```
+   export DEEPSEEK_API_KEY=sk-...
+   ```
+
+   No `$DSH_HOME/cordis.patch.yml` is required for this — confirmed on a scratch `DSH_HOME` with
+   no home-level patch at all. The `cc` profile's own `llm-deepseek` row
+   (`profiles/cc/cordis.patch.yml`) already sets `apiKeyEnv: DEEPSEEK_API_KEY`, and that's enough:
+   the `headless` profile reads the launch environment directly, and `cc`'s credentials service
+   (`dsh-credentials-local`) inherits the same env var when nothing is stored in
+   `$DSH_HOME/.credentials.yaml`. A home-level patch only matters once you want a *stored*
+   credential instead of an exported one.
+
+3. **Install the six `@markishh/*` packages into the `cc` profile.**
+
+   **Once `0.1.0` is on npm** (not yet published — this is the intended route, not the verified
+   one):
+
+   ```
+   git clone https://github.com/markishh/mdcode && cd mdcode
+   dsh plugin --profile cc add @markishh/dsh-agents-md @markishh/dsh-task-tool \
+     @markishh/dsh-model-tiers @markishh/dsh-commands-md @markishh/dsh-plugin-log \
+     @markishh/dsh-hooks-approval
+   ```
+
+   **Today**, before that publish, the verified route is a git checkout with `link:` deps:
+
+   ```
+   git clone https://github.com/markishh/mdcode && cd mdcode && pnpm install
+   scripts/setup-profile.sh [DSH_HOME]
+   ```
+
+   `DSH_HOME` defaults to `~/.dsh`, same as `dsh` itself. The script copies
+   `profiles/cc/cordis.patch.yml` into `$DSH_HOME/profiles/cc/`, writes a `package.json` there with
+   the six `@markishh/*` deps as `link:` entries pointed at absolute paths into this checkout (a
+   profile resolves `link:` relative to its own `package.json`, not the repo root), writes a
+   `pnpm-workspace.yaml` that pre-approves the native deps' build scripts so `pnpm install` never
+   stops for an interactive prompt, runs that install, and prints the launch commands below.
+   Re-run it any time the checkout moves or the packages change — it's idempotent.
+
+4. **Launch.**
+
+   ```
+   DSH_HOME=<home> dsh --profile cc                                       # TUI
+   DSH_HOME=<home> dsh --profile headless "reply with the single word OK"  # one-shot
+   ```
+
+   `headless` doesn't need step 3 — it auto-initializes its own profile directory under
+   `$DSH_HOME/profiles/headless` on first run and never touches the `cc` profile at all.
+
+5. **What you'll see.**
+
+   - In the `cc` TUI, `/` lists the commands loaded from `~/.claude/commands` and
+     `~/.claude/skills`; agents from `~/.claude/agents` show up as `Task` subagent types.
+   - `$DSH_HOME/logs/plugins.log` records plugin activity (registered commands, registered agent
+     presets, warnings, errors) for both profiles.
+   - Three Claude Code inputs carry over as-is: `~/.claude/agents`, `~/.claude/commands` +
+     `~/.claude/skills`, and the hooks in `~/.claude/settings.json`.
+   - `$DSH_HOME/AGENTS.md` is the global-rules file this harness actually reads — symlink your
+     `~/.claude/CLAUDE.md` there (`ln -s ~/.claude/CLAUDE.md $DSH_HOME/AGENTS.md`) to carry it over
+     too.
+
 ## Packages
 
 | package | tests | what it does |
@@ -24,9 +97,9 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 | `@markishh/dsh-model-tiers` | 39 | The model alias table (`haiku`/`sonnet`/`opus`/`review` → DeepSeek model + reasoning effort), route logging, and a retry fallback for non-retryable error codes. |
 | `@markishh/dsh-commands-md` | 67 | `/intake`, `/build`, `/ship`, `/trace`, `/daily-review` as real slash commands with `$ARGUMENTS` expansion. |
 | `@markishh/dsh-plugin-log` | 7 | A file sink for `ctx.logger` output, since no shipped profile mounts one. |
-| `@markishh/dsh-hooks-approval` | 42 | Runs `PermissionRequest` and `SessionEnd` hooks from `~/.claude/settings.json` — the two events the first-party Claude Code hooks bridge does not cover — including an approval-relay hook that can block on an external allow/deny decision. |
+| `@markishh/dsh-hooks-approval` | 51 | Runs `PermissionRequest` and `SessionEnd` hooks from `~/.claude/settings.json` — the two events the first-party Claude Code hooks bridge does not cover — including an approval-relay hook that can block on an external allow/deny decision. |
 
-Workspace total: 292 tests (`pnpm test`, `node --test`, all passing).
+Workspace total: 301 tests (`pnpm test`, `node --test`, all passing).
 
 ## Install
 

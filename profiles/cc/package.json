@@ -2,7 +2,7 @@
   "name": "dsh-profile-cc",
   "version": "0.0.0",
   "private": true,
-  "description": "DRAFT — the cc profile: dsh-base + the TUI front-end + the four mdcode plugins. Not installed anywhere yet.",
+  "description": "The cc profile: dsh-base + the TUI front-end + the six mdcode plugins.",
   "dependencies": {
     "@deepseek-ai/dsh-hook-protocol": "0.2.1-rc.5",
     "@deepseek-ai/dsh-hooks-claude-code": "0.2.1-rc.5",
