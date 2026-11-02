@@ -174,10 +174,9 @@ for (const [name, server] of Object.entries(servers)) {
     lines.push(`    command: /bin/sh`);
     lines.push(`    args:`);
     lines.push(emitList(['-c', buildStdioExecScript(name, server.command, server.args)], 6));
-    // MDCODE_LOG_DIR is computed at config time so it is always a string even when DSH_HOME is unset; dsh-mcp-client's child-env scrub drops
-    // ambient DSH_* names before configured `env` merges on top, so the
-    // `${DSH_HOME:-...}` fallback in the script above needs this re-added
-    // explicitly or it silently uses the wrong log directory.
+    // MDCODE_LOG_DIR is computed at config time (DSH_HOME or ~/.dsh, plus /logs) so it is
+    // always a string even when DSH_HOME is not exported; dsh-mcp-client's child-env scrub
+    // drops ambient DSH_* names, and configured `env` merges on top.
     lines.push(`    env:`);
     lines.push(`      DSH_HOME: ${jsEnvRef('DSH_HOME')}`);
     if (server.env && Object.keys(server.env).length) {
