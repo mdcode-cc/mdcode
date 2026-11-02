@@ -8,6 +8,7 @@
     "@deepseek-ai/dsh-hooks-claude-code": "0.2.1-rc.5",
     "@deepseek-harness-tui/dsh-tui": "0.18.0",
     "@mdcode-cc/dsh-agents-md": "link:../../packages/dsh-agents-md",
+    "@mdcode-cc/dsh-changes-panel": "link:../../packages/dsh-changes-panel",
     "@mdcode-cc/dsh-commands-md": "link:../../packages/dsh-commands-md",
     "@mdcode-cc/dsh-model-tiers": "link:../../packages/dsh-model-tiers",
     "@mdcode-cc/dsh-task-tool": "link:../../packages/dsh-task-tool",

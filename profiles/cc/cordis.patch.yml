@@ -348,6 +348,14 @@
         toolName: subagent
         maxDepth: 2
 
+    # --- git working-tree side panel (Ctrl+B column) ----------------------
+    # Reads git directly (execFile, never ctx.workspaceChanges — that
+    # service isn't mounted in this profile). No-ops if dsh-tui isn't
+    # composed (ctx.inject(['tuiPanels'], ...) never fires). Defaults only.
+    - id: cc-changes-panel
+      name: '@mdcode-cc/dsh-changes-panel'
+      disabled: false
+
     # --- host-level tool rows for the main session, not a preset ----------
     # Section 0 points the `dsh-tui` row's `preset:` at `cc-no-preset` (an id
     # nothing registers) so the main session never hits the persona/
