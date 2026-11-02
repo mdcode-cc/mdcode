@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Materialize the `cc` profile under a dsh DSH_HOME from this checkout's
-# profiles/cc/, with the six @markishh `link:` deps rewritten to absolute
+# profiles/cc/, with the six @mdcode-cc `link:` deps rewritten to absolute
 # paths into this checkout (a profile resolves `link:` relative to its own
 # package.json, not the repo root, so a relative path breaks once the
 # profile and the checkout aren't siblings). Idempotent — re-run any time

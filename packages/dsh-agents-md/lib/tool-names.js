@@ -16,7 +16,7 @@
  *   dsh-tool-ask-user      -> ask_user_question
  *   dsh-tool-jobs          -> job_output, job_list, job_kill
  *   dsh-plan-mode          -> exit_plan_mode
- *   @markishh/dsh-task-tool -> `toolName` config, the `cc` profile sets it
+ *   @mdcode-cc/dsh-task-tool -> `toolName` config, the `cc` profile sets it
  *                              to `Task` — an identity mapping on this host
  *
  * `NotebookEdit` and `Agent` have no dedicated dsh counterpart in this row

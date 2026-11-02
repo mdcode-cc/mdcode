@@ -9,7 +9,7 @@
 # Symbol-keyed registry (dsh-scope's kScope) splits, breaking preset
 # registration ("already registered"). Only out-of-tree packages belong in
 # this profile's package.json `dependencies` (dsh-hooks-claude-code, dsh-tui,
-# @markishh/*).
+# @mdcode-cc/*).
 # ===========================================================================
 #
 # The `cc` profile patch layer. It is applied after the bundles listed in this
@@ -30,7 +30,7 @@
 #
 # ---------------------------------------------------------------------------
 # 0. Keep the main TUI session off the agent-preset roster, while leaving the
-#    roster (and its register() API) mounted for @markishh/dsh-agents-md.
+#    roster (and its register() API) mounted for @mdcode-cc/dsh-agents-md.
 # ---------------------------------------------------------------------------
 # ROOT CAUSE:
 #
@@ -126,7 +126,7 @@
     effort: max
     # DSH_TUI_PRESET still wins if a human ever wants a different preset for
     # a one-off session; the fallback is back to the id nothing registers.
-    # A `cc-main` preset (the same tool surface `@markishh/dsh-agents-md`
+    # A `cc-main` preset (the same tool surface `@mdcode-cc/dsh-agents-md`
     # gives every `cc-<agent>` preset, minus the persona row) was tried as an
     # alternative and crashes the boot instead — see the host-level tool
     # rows in section 3's final block below for why, and for the fix
@@ -242,7 +242,7 @@
 - insert:
     # --- (a)+(d): model policy, route logging, protocol retry fallback -----
     - id: cc-model-tiers
-      name: '@markishh/dsh-model-tiers'
+      name: '@mdcode-cc/dsh-model-tiers'
       disabled: false
       config:
         provider: deepseek-official
@@ -266,7 +266,7 @@
     # realm ... dsh-agent-presets rejects that at mount") applies to anything
     # added here that publishes a service.
     - id: cc-agents-md
-      name: '@markishh/dsh-agents-md'
+      name: '@mdcode-cc/dsh-agents-md'
       disabled: false  # unrelated to any @markishh row (see section 3 header above); enabled.
       config:
         userDir: '~/.claude/agents'
@@ -297,7 +297,7 @@
 
     # --- the Task tool + (b) context cap + (c) loop guard -----------------
     - id: cc-task-tool
-      name: '@markishh/dsh-task-tool'
+      name: '@mdcode-cc/dsh-task-tool'
       disabled: false
       config:
         provider: spawn          # the only provider advertising agentPreset
@@ -314,7 +314,7 @@
 
     # --- the markdown slash commands --------------------------------------
     - id: cc-commands-md
-      name: '@markishh/dsh-commands-md'
+      name: '@mdcode-cc/dsh-commands-md'
       disabled: false
       config:
         userCommandDir: '~/.claude/commands'
@@ -363,7 +363,7 @@
     #
     # An alternative was tried first and does not work: a `cc-main` preset
     # (declarative `@deepseek-ai/dsh-agent-preset` row, same
-    # `referenceInheritPlugins` set `@markishh/dsh-agents-md` gives every
+    # `referenceInheritPlugins` set `@mdcode-cc/dsh-agents-md` gives every
     # `cc-<agent>` preset, minus the persona row) — reasoning it'd dodge the
     # persona collision by never claiming `deployment:persona-prefix`. Real
     # boot crash instead (`agent-preset/invalid` — EVERY generic tool row
@@ -593,7 +593,7 @@
 # ---------------------------------------------------------------------------
 # 6. Plugin logging — appends every ctx.logger message to a file
 # ---------------------------------------------------------------------------
-# @markishh/dsh-plugin-log — real (non-stub) cordis logger exporter, proven
+# @mdcode-cc/dsh-plugin-log — real (non-stub) cordis logger exporter, proven
 # on a real `dsh --profile headless` boot. No `names` filter: a filter would
 # exclude `@deepseek-ai/dsh-agent-preset-registry`'s own warn()s (fiber name
 # "agent-preset-registry", no "dsh-" prefix — the plugin has no `export const
@@ -602,7 +602,7 @@
 # profile cares about would drift. level: info admits warn too.
 - insert:
     - id: cc-plugin-log
-      name: '@markishh/dsh-plugin-log'
+      name: '@mdcode-cc/dsh-plugin-log'
       config:
         path: '$DSH_HOME/logs/plugins.log'
         level: info
@@ -611,7 +611,7 @@
 # 7. PermissionRequest/SessionEnd relay — the two events section 4's
 #    `hooks-claude-code` row does not bridge (see its comment above).
 # ---------------------------------------------------------------------------
-# @markishh/dsh-hooks-approval — reads the SAME settings.json as the
+# @mdcode-cc/dsh-hooks-approval — reads the SAME settings.json as the
 # `hooks-claude-code` row above and runs its configured `PermissionRequest`
 # (a blocking approval-relay PermissionRequest hook) and `SessionEnd`
 # commands, the only two of the four hooks.json entries that row silently
@@ -625,7 +625,7 @@
 # couple of minutes instead of ten.
 - insert:
     - id: cc-hooks-approval
-      name: '@markishh/dsh-hooks-approval'
+      name: '@mdcode-cc/dsh-hooks-approval'
       config:
         configPath: !!js "process.env.HOME + '/.claude/settings.json'"
         timeoutMs: 120000

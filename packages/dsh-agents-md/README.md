@@ -1,4 +1,4 @@
-# @markishh/dsh-agents-md
+# @mdcode-cc/dsh-agents-md
 
 **Status: implemented.** `node --test test/*.test.js` is green; the real-mount check (Q7,
 below) passed live against `0.2.1-rc.5` under the `headless` profile. Under the real `cc`/
@@ -11,7 +11,7 @@ Written against host `0.2.1-rc.5` (`/opt/homebrew/lib/node_modules/@deepseek-ai/
 
 Read Claude-Code-style agent definition files and turn each one into a real dsh **agent preset** —
 a named composition the subagent system can mount for a child independently of its parent. Also
-publish the parsed roster as a catalog so `@markishh/dsh-task-tool` can map a `subagent_type`
+publish the parsed roster as a catalog so `@mdcode-cc/dsh-task-tool` can map a `subagent_type`
 to a preset id, a model tier and a tool mask without re-parsing anything.
 
 **Trust boundary.** Project-root `.claude/agents/*.md` files are trusted, not sandboxed: starting
@@ -72,7 +72,7 @@ this repo uses to bridge that gap, built by grepping each tool package's own
 | `WebFetch` | `web_fetch` | `dsh-tool-web` |
 | `WebSearch` | `web_search` | `dsh-tool-web` |
 | `TodoWrite` | `todo_write` | `dsh-tool-todo` |
-| `Task` | `Task` | `@markishh/dsh-task-tool`'s configurable `toolName`, which the `cc` profile sets to `Task` — an identity mapping on this host |
+| `Task` | `Task` | `@mdcode-cc/dsh-task-tool`'s configurable `toolName`, which the `cc` profile sets to `Task` — an identity mapping on this host |
 | `Agent` | `Task` | no tool literally named "Agent" on this host; same delegation surface as `Task` |
 | `NotebookEdit` | `edit` | no notebook-specific tool in this row set; closest analog |
 | `TaskCreate` / `TaskUpdate` / `TaskList` | `todo_write` | Claude Code's three-tool task tracker folds into dsh's one `todo_write` tool |

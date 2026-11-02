@@ -1,5 +1,5 @@
 /**
- * @markishh/dsh-plugin-log — a minimal cordis logger exporter: appends every
+ * @mdcode-cc/dsh-plugin-log — a minimal cordis logger exporter: appends every
  * `ctx.logger` message (optionally filtered by logger-name prefix) to a
  * plain-text file, formatted with cordis's own `Logger.format()`. Built
  * directly on `ctx.logger.exporter()`; see ./README.md.
@@ -18,7 +18,7 @@ export const name = 'dsh-plugin-log'
 // LoggerLevel is ERROR 0, INFO 1, WARN 2, DEBUG 3 — WARN ranks ABOVE INFO.
 // So a naive {error:0, info:1, warn:2, debug:3} threshold table, with
 // level: 'info' (ceiling 1), would silently DROP every warn (2 > 1) — the
-// exact failure mode both @markishh plugins hit (they report at warn).
+// exact failure mode both @mdcode-cc plugins hit (they report at warn).
 // cordis's ordering also cannot express "warn without info": any ceiling
 // that admits WARN (>=2) also admits INFO (1 <= 2). So 'info' and 'warn'
 // collapse to the same ceiling (2) — error+info+warn, debug excluded —

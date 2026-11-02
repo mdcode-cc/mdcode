@@ -1,5 +1,5 @@
 {
-  "name": "@markishh/dsh-commands-md",
+  "name": "@mdcode-cc/dsh-commands-md",
   "version": "0.1.0",
   "description": "Register Claude-Code-style markdown slash commands (.claude/commands/*.md) as dsh commands, with $ARGUMENTS substitution.",
   "license": "MIT",

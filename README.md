@@ -39,16 +39,16 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
    `$DSH_HOME/.credentials.yaml`. A home-level patch only matters once you want a *stored*
    credential instead of an exported one.
 
-3. **Install the six `@markishh/*` packages into the `cc` profile.**
+3. **Install the six `@mdcode-cc/*` packages into the `cc` profile.**
 
    **Once `0.1.0` is on npm** (not yet published — this is the intended route, not the verified
    one):
 
    ```
    git clone https://github.com/mdcode-cc/mdcode && cd mdcode
-   dsh plugin --profile cc add @markishh/dsh-agents-md @markishh/dsh-task-tool \
-     @markishh/dsh-model-tiers @markishh/dsh-commands-md @markishh/dsh-plugin-log \
-     @markishh/dsh-hooks-approval
+   dsh plugin --profile cc add @mdcode-cc/dsh-agents-md @mdcode-cc/dsh-task-tool \
+     @mdcode-cc/dsh-model-tiers @mdcode-cc/dsh-commands-md @mdcode-cc/dsh-plugin-log \
+     @mdcode-cc/dsh-hooks-approval
    ```
 
    **Today**, before that publish, the verified route is a git checkout with `link:` deps:
@@ -60,7 +60,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 
    `DSH_HOME` defaults to `~/.dsh`, same as `dsh` itself. The script copies
    `profiles/cc/cordis.patch.yml` into `$DSH_HOME/profiles/cc/`, writes a `package.json` there with
-   the six `@markishh/*` deps as `link:` entries pointed at absolute paths into this checkout (a
+   the six `@mdcode-cc/*` deps as `link:` entries pointed at absolute paths into this checkout (a
    profile resolves `link:` relative to its own `package.json`, not the repo root), writes a
    `pnpm-workspace.yaml` that pre-approves the native deps' build scripts so `pnpm install` never
    stops for an interactive prompt, runs that install, and prints the launch commands below.
@@ -92,12 +92,12 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 
 | package | tests | what it does |
 |---|---|---|
-| `@markishh/dsh-agents-md` | 66 | Parses `.claude/agents/*.md` and registers one real dsh agent preset per agent. |
-| `@markishh/dsh-task-tool` | 71 | A `Task` tool dispatching to the registered presets, with a per-subagent context cap and a loop guard on repeated verification-only tool calls. |
-| `@markishh/dsh-model-tiers` | 39 | The model alias table (`haiku`/`sonnet`/`opus`/`review` → DeepSeek model + reasoning effort), route logging, and a retry fallback for non-retryable error codes. |
-| `@markishh/dsh-commands-md` | 67 | `/intake`, `/build`, `/ship`, `/trace`, `/daily-review` as real slash commands with `$ARGUMENTS` expansion. |
-| `@markishh/dsh-plugin-log` | 7 | A file sink for `ctx.logger` output, since no shipped profile mounts one. |
-| `@markishh/dsh-hooks-approval` | 51 | Runs `PermissionRequest` and `SessionEnd` hooks from `~/.claude/settings.json` — the two events the first-party Claude Code hooks bridge does not cover — including an approval-relay hook that can block on an external allow/deny decision. |
+| `@mdcode-cc/dsh-agents-md` | 66 | Parses `.claude/agents/*.md` and registers one real dsh agent preset per agent. |
+| `@mdcode-cc/dsh-task-tool` | 71 | A `Task` tool dispatching to the registered presets, with a per-subagent context cap and a loop guard on repeated verification-only tool calls. |
+| `@mdcode-cc/dsh-model-tiers` | 39 | The model alias table (`haiku`/`sonnet`/`opus`/`review` → DeepSeek model + reasoning effort), route logging, and a retry fallback for non-retryable error codes. |
+| `@mdcode-cc/dsh-commands-md` | 67 | `/intake`, `/build`, `/ship`, `/trace`, `/daily-review` as real slash commands with `$ARGUMENTS` expansion. |
+| `@mdcode-cc/dsh-plugin-log` | 7 | A file sink for `ctx.logger` output, since no shipped profile mounts one. |
+| `@mdcode-cc/dsh-hooks-approval` | 51 | Runs `PermissionRequest` and `SessionEnd` hooks from `~/.claude/settings.json` — the two events the first-party Claude Code hooks bridge does not cover — including an approval-relay hook that can block on an external allow/deny decision. |
 
 Workspace total: 301 tests (`pnpm test`, `node --test`, all passing).
 
@@ -106,19 +106,19 @@ Workspace total: 301 tests (`pnpm test`, `node --test`, all passing).
 Each package is a plain cordis plugin. Add it to a `dsh` profile:
 
 ```
-dsh plugin --profile <name> add @markishh/dsh-agents-md
-dsh plugin --profile <name> add @markishh/dsh-task-tool
-dsh plugin --profile <name> add @markishh/dsh-model-tiers
-dsh plugin --profile <name> add @markishh/dsh-commands-md
-dsh plugin --profile <name> add @markishh/dsh-plugin-log
-dsh plugin --profile <name> add @markishh/dsh-hooks-approval
+dsh plugin --profile <name> add @mdcode-cc/dsh-agents-md
+dsh plugin --profile <name> add @mdcode-cc/dsh-task-tool
+dsh plugin --profile <name> add @mdcode-cc/dsh-model-tiers
+dsh plugin --profile <name> add @mdcode-cc/dsh-commands-md
+dsh plugin --profile <name> add @mdcode-cc/dsh-plugin-log
+dsh plugin --profile <name> add @mdcode-cc/dsh-hooks-approval
 ```
 
 During development, link the package instead of publishing it:
 
 ```
 cd packages/dsh-agents-md && pnpm link --global
-dsh plugin --profile <name> add @markishh/dsh-agents-md
+dsh plugin --profile <name> add @mdcode-cc/dsh-agents-md
 ```
 
 ## The `cc` profile

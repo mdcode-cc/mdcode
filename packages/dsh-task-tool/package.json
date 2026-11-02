@@ -1,5 +1,5 @@
 {
-  "name": "@markishh/dsh-task-tool",
+  "name": "@mdcode-cc/dsh-task-tool",
   "version": "0.1.0",
   "description": "A Task delegation tool for dsh: spawns a named agent from the dsh-agents-md catalog, with a per-child context cap and a verification-loop guard.",
   "license": "MIT",
@@ -39,7 +39,7 @@
     "@deepseek-ai/dsh-token-meter": "0.2.1-rc.5",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.5",
     "@deepseek-ai/schemastery": "~3.18.4",
-    "@markishh/dsh-agents-md": "workspace:^"
+    "@mdcode-cc/dsh-agents-md": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "3.18.5"

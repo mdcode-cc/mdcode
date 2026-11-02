@@ -10,7 +10,7 @@
 # the two instances — presets then fail to mount with "prompt section ...
 # is already registered". Verified with real boots. Only out-of-tree
 # packages (e.g. @deepseek-ai/dsh-hooks-claude-code,
-# @deepseek-harness-tui/dsh-tui, @markishh/*) belong in a profile's
+# @deepseek-harness-tui/dsh-tui, @mdcode-cc/*) belong in a profile's
 # package.json `dependencies`.
 set -uo pipefail
 

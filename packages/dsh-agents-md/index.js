@@ -1,5 +1,5 @@
 /**
- * @markishh/dsh-agents-md — one dsh agent preset per Claude-Code-style agent
+ * @mdcode-cc/dsh-agents-md — one dsh agent preset per Claude-Code-style agent
  * markdown file (`~/.claude/agents/*.md`, `<project>/.claude/agents/*.md`).
  * Publishes the parsed roster as `ctx.agentsMd`. See ./README.md for the spec.
  */

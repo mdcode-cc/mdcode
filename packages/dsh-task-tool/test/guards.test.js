@@ -88,7 +88,7 @@ test('deny guard: a CC-mapped tool (bash) is still masked normally — the codom
 
 test('KNOWN_DSH_TOOL_NAMES equals the live CC_TO_DSH_TOOL_NAMES codomain from dsh-agents-md', async () => {
   const { KNOWN_DSH_TOOL_NAMES } = await import('../lib/guards.js')
-  const { CC_TO_DSH_TOOL_NAMES } = await import('@markishh/dsh-agents-md/lib/tool-names.js')
+  const { CC_TO_DSH_TOOL_NAMES } = await import('@mdcode-cc/dsh-agents-md/lib/tool-names.js')
   const expected = new Set(Object.values(CC_TO_DSH_TOOL_NAMES).flat())
   assert.deepEqual([...KNOWN_DSH_TOOL_NAMES].sort(), [...expected].sort())
   assert.ok(KNOWN_DSH_TOOL_NAMES.size > 0) // sanity: the table actually has entries

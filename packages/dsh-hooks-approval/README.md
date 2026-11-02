@@ -1,4 +1,4 @@
-# @markishh/dsh-hooks-approval
+# @mdcode-cc/dsh-hooks-approval
 
 Runs the `PermissionRequest` (blocking approval relay) and `SessionEnd`
 command hooks from a Claude Code `settings.json` — the two hook events
@@ -50,7 +50,7 @@ the decision to stdout.
 | `cacheMaxAgeMs` | `300000` (5 min) | How long a cached `tools/pre-execute` tool-input survives without a matching `tools/post-execute`. |
 
 ```yaml
-- name: '@markishh/dsh-hooks-approval'
+- name: '@mdcode-cc/dsh-hooks-approval'
   config:
     # Default: path.join(os.homedir(), '.claude', 'settings.json') — pass an
     # explicit path only to point at a different settings.json.
@@ -194,7 +194,7 @@ the decision to stdout.
 Ran `DSH_HOME=$HOME/.dsh DSH_PERMISSION_MODE=read-only dsh --profile
 headless --patch <overlay> "run the shell command: touch <marker path>"`
 against a real build (temporarily adding this package +
-`@markishh/dsh-plugin-log` as `headless` profile dependencies, reverted
+`@mdcode-cc/dsh-plugin-log` as `headless` profile dependencies, reverted
 after):
 
 1. **Deny variant** (`test/fixtures/deny.sh` as the configured

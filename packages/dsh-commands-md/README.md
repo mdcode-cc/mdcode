@@ -1,4 +1,4 @@
-# @markishh/dsh-commands-md
+# @mdcode-cc/dsh-commands-md
 
 **Status: implemented (v1).** See `index.js` and `lib/*.js`; this file is still the spec it was built against.
 

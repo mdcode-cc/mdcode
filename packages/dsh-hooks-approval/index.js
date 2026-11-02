@@ -1,5 +1,5 @@
 /**
- * @markishh/dsh-hooks-approval — emulates the two Claude Code hook events
+ * @mdcode-cc/dsh-hooks-approval — emulates the two Claude Code hook events
  * @deepseek-ai/dsh-hooks-claude-code does not bridge: `PermissionRequest`
  * (a blocking approval relay) and `SessionEnd`. Both run the command hooks
  * configured for them in a Claude Code settings.json `hooks` key.

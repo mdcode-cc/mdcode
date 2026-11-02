@@ -1,4 +1,4 @@
-# @markishh/dsh-model-tiers
+# @mdcode-cc/dsh-model-tiers
 
 **Status: implemented.** `index.js` + `lib/aliases.js` + `lib/retry.js`, tested with `node:test`
 (39 passing tests) and verified with one real `dsh --profile headless` call. This file is the

@@ -27,7 +27,7 @@
  * tool concept maps to it at all — see README "Second/Third pass".
  */
 
-import { CC_TO_DSH_TOOL_NAMES } from '@markishh/dsh-agents-md/lib/tool-names.js'
+import { CC_TO_DSH_TOOL_NAMES } from '@mdcode-cc/dsh-agents-md/lib/tool-names.js'
 
 /**
  * The codomain of `dsh-agents-md`'s `CC_TO_DSH_TOOL_NAMES` — every dsh tool

@@ -1,4 +1,4 @@
-# @markishh/dsh-task-tool
+# @mdcode-cc/dsh-task-tool
 
 **Status: implemented.** 71/71 unit tests pass. Real `dsh` run verifies dispatch end-to-end
 (`PONG`, see "Implementation notes"); hardening (b) the context cap and (c) the loop guard are
@@ -12,7 +12,7 @@ Written against host `0.2.1-rc.5` (`/opt/homebrew/lib/node_modules/@deepseek-ai/
 ## Purpose
 
 One model-facing `Task` tool with Claude Code's parameter names, dispatching to the agent presets
-`@markishh/dsh-agents-md` registered. It owns two of the four hardening requirements: the
+`@mdcode-cc/dsh-agents-md` registered. It owns two of the four hardening requirements: the
 per-subagent context cap and the verification-loop guard.
 
 ## Why not just configure `@deepseek-ai/dsh-tool-subagent`
@@ -536,9 +536,9 @@ unit-tested only, stated plainly in the status header above, not glossed over.
    regardless of `dshTools`/`dshDisallowedTools`.
 
    **Why this is a duplicated constant, not an import**, checked empirically rather than assumed:
-   `@markishh/dsh-agents-md`'s `package.json` `exports` map publishes only `"."` and
-   `"./package.json"` — `import('@markishh/dsh-agents-md/lib/tool-names.js')` rejects with
-   `ERR_PACKAGE_PATH_NOT_EXPORTED`, and `Object.keys(await import('@markishh/dsh-agents-md'))` is
+   `@mdcode-cc/dsh-agents-md`'s `package.json` `exports` map publishes only `"."` and
+   `"./package.json"` — `import('@mdcode-cc/dsh-agents-md/lib/tool-names.js')` rejects with
+   `ERR_PACKAGE_PATH_NOT_EXPORTED`, and `Object.keys(await import('@mdcode-cc/dsh-agents-md'))` is
    `['Config', 'apply', 'default', 'inject', 'name']` — no re-export of the table, and
    `ctx.agentsMd` itself (`list`/`get`/`presetId`/`revision`) exposes no such accessor either.
    Both import paths the finding suggested were tried and both are genuinely closed today, so
@@ -634,7 +634,7 @@ finding 4).
    of leaking it".
 4. **`lib/guards.js`'s `KNOWN_DSH_TOOL_NAMES` duplication — resolved via an authorized exports-map
    edit.** Added `"./lib/tool-names.js": "./lib/tool-names.js"` to
-   `packages/dsh-agents-md/package.json`'s `exports` map (verified: `import('@markishh/dsh-agents-md/lib/tool-names.js')`
+   `packages/dsh-agents-md/package.json`'s `exports` map (verified: `import('@mdcode-cc/dsh-agents-md/lib/tool-names.js')`
    now resolves, where it previously threw `ERR_PACKAGE_PATH_NOT_EXPORTED`). `lib/guards.js` now
    imports the real `CC_TO_DSH_TOOL_NAMES` and derives `KNOWN_DSH_TOOL_NAMES =
    new Set(Object.values(CC_TO_DSH_TOOL_NAMES).flat())` — no more hand-kept duplicate, and the set

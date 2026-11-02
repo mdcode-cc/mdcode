@@ -1,5 +1,5 @@
 {
-  "name": "@markishh/dsh-plugin-log",
+  "name": "@mdcode-cc/dsh-plugin-log",
   "version": "0.1.0",
   "description": "Append every ctx.logger message, optionally filtered by logger-name prefix, to a plain-text log file.",
   "license": "MIT",

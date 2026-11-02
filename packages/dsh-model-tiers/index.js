@@ -1,5 +1,5 @@
 /**
- * @markishh/dsh-model-tiers — the single place the model policy lives.
+ * @mdcode-cc/dsh-model-tiers — the single place the model policy lives.
  *
  * Resolves Claude-Code-style tier names to DeepSeek routes, logs the
  * resolved route on every request (hardening (d)), and retries the two

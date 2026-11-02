@@ -1,6 +1,6 @@
 /**
- * @markishh/dsh-task-tool — one Claude-Code-shaped `Task` tool dispatching
- * to the `@markishh/dsh-agents-md` catalog, with a per-child context cap
+ * @mdcode-cc/dsh-task-tool — one Claude-Code-shaped `Task` tool dispatching
+ * to the `@mdcode-cc/dsh-agents-md` catalog, with a per-child context cap
  * (hardening b) and a verification-loop guard (hardening c).
  *
  * Spec: ./README.md and ../../docs/DESIGN.md §4.2.

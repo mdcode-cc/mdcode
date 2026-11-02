@@ -177,14 +177,14 @@ route for every request, and an alias resolving differently than expected is inv
 Full spec per plugin — every config key, every failure mode, the full test plan — is in its own
 `packages/*/README.md`. Condensed here to purpose, seams and size.
 
-### 4.1 `@markishh/dsh-agents-md` — 607 lines (`index.js` 120 + `lib/*.js` 487)
+### 4.1 `@mdcode-cc/dsh-agents-md` — 607 lines (`index.js` 120 + `lib/*.js` 487)
 
 Parses `.claude/agents/*.md` and registers one dsh agent preset per agent; publishes the roster as
 `ctx.agentsMd`. Seams: `ctx.agentPresets.register()` (`dsh-agent-preset-registry`), a
 `@deepseek-ai/dsh-persona` row per preset, `ctx.provide('agentsMd', …)`. Passive after mount — no
 agent-loop event. See `packages/dsh-agents-md/README.md`.
 
-### 4.2 `@markishh/dsh-task-tool` — 613 lines (`index.js` 147 + `lib/*.js` 466)
+### 4.2 `@mdcode-cc/dsh-task-tool` — 613 lines (`index.js` 147 + `lib/*.js` 466)
 
 One `Task(description, prompt, subagent_type, run_in_background?)` tool dispatching to the
 registered presets. Owns hardening (b) and (c). `dsh-tool-subagent`'s `allowedAgentPresets` gets
@@ -195,13 +195,13 @@ per-agent tool mask — see the README for the full comparison and the rc.2→rc
 `tools/pre-execute`/`tools/post-execute`, `ctx.tokenMeter.measure()`. See
 `packages/dsh-task-tool/README.md`.
 
-### 4.3 `@markishh/dsh-model-tiers` — 296 lines (`index.js` 117 + `lib/*.js` 179)
+### 4.3 `@mdcode-cc/dsh-model-tiers` — 296 lines (`index.js` 117 + `lib/*.js` 179)
 
 The single place the model policy lives. Owns hardening (a)-fallback and (d). Config-only by
 design, so the policy shows up in a `cordis.patch.yml` diff. Seams: `ctx.provide('modelTiers', …)`,
 the `agent/request` and `agent/request-error` waterfalls. See `packages/dsh-model-tiers/README.md`.
 
-### 4.4 `@markishh/dsh-commands-md` — 590 lines (`index.js` 114 + `lib/*.js` 476)
+### 4.4 `@mdcode-cc/dsh-commands-md` — 590 lines (`index.js` 114 + `lib/*.js` 476)
 
 `/intake`, `/build`, `/ship`, `/trace`, `/daily-review` as real slash commands. A skill is *loaded
 as instructions*; a command is *submitted as a turn with arguments* and lands in a different
@@ -209,13 +209,13 @@ position in history — see the README for why the first-party skill loader can'
 Seams: `ctx.commands.register()`, `agent.followup()` with `recordInput: false`. See
 `packages/dsh-commands-md/README.md`.
 
-### 4.5 `@markishh/dsh-plugin-log` — 57 lines (`index.js` only, no `lib/`)
+### 4.5 `@mdcode-cc/dsh-plugin-log` — 57 lines (`index.js` only, no `lib/`)
 
 Plugin logs → a file sink, needed because no shipped profile mounts a logger exporter. Seam:
 `ctx.logger.exporter()` — the same API `dsh-app-boot` itself uses internally. See
 `packages/dsh-plugin-log/README.md`.
 
-### 4.6 `@markishh/dsh-hooks-approval` — 392 lines (`index.js` 125 + `lib/*.js` 267)
+### 4.6 `@mdcode-cc/dsh-hooks-approval` — 392 lines (`index.js` 125 + `lib/*.js` 267)
 
 Runs the two hooks `dsh-hooks-claude-code` does not bridge — `PermissionRequest` (an
 approval-relay hook that blocks on an external allow/deny decision) and `SessionEnd` — straight
@@ -336,7 +336,7 @@ Yes — real-boot evidence in `profiles/cc/cordis.patch.yml:23-114`. Two finding
    shadow with). **Fix: remove those four packages as direct dependencies** — now the standing
    rule, "Profile rules" (§1). After the fix, 16/16 presets mount and a live `Task` → `tester`
    returned `PONG` in the real TUI. Latent risk: `mdcode`'s own root `node_modules` still holds a
-   *third* copy of `dsh-scope` — harmless until a `@markishh` plugin imports it directly. A `fork`
+   *third* copy of `dsh-scope` — harmless until a `@mdcode-cc` plugin imports it directly. A `fork`
    provider was evaluated and rejected (`inheritsParentContext: true` loses per-agent tools,
    persona and context isolation at once). Separately, `dsh-tui`'s own bundled presets stay routed
    away regardless (`preset: cc-no-preset` is deliberate, `profiles/cc/cordis.patch.yml:136`);

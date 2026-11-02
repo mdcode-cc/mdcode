@@ -11,9 +11,9 @@ Every factual line is a dated observation. The host (`dsh`) is a release candida
 
 Six cordis plugins for the DeepSeek Harness (`dsh`) that port a Claude-Code-shaped terminal
 coding workflow onto DeepSeek models only. pnpm workspace, Node >=22, plain JavaScript ESM (no
-TypeScript, no build step — cordis loads `index.js` directly). Packages: `@markishh/dsh-agents-md`,
-`@markishh/dsh-task-tool`, `@markishh/dsh-model-tiers`, `@markishh/dsh-commands-md`,
-`@markishh/dsh-plugin-log`, `@markishh/dsh-hooks-approval`, plus the `cc` profile under
+TypeScript, no build step — cordis loads `index.js` directly). Packages: `@mdcode-cc/dsh-agents-md`,
+`@mdcode-cc/dsh-task-tool`, `@mdcode-cc/dsh-model-tiers`, `@mdcode-cc/dsh-commands-md`,
+`@mdcode-cc/dsh-plugin-log`, `@mdcode-cc/dsh-hooks-approval`, plus the `cc` profile under
 `profiles/cc/`.
 
 Implemented and unit-tested; each plugin has been activated on a real headless `dsh` run. 292

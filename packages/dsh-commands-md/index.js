@@ -1,5 +1,5 @@
 /**
- * @markishh/dsh-commands-md — registers Claude-Code-style markdown slash
+ * @mdcode-cc/dsh-commands-md — registers Claude-Code-style markdown slash
  * commands (`~/.claude/commands/*.md`, `~/.claude/skills/<name>/SKILL.md`, and
  * their project equivalents) as real `ctx.commands` entries.
  *

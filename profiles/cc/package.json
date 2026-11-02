@@ -7,12 +7,12 @@
     "@deepseek-ai/dsh-hook-protocol": "0.2.1-rc.5",
     "@deepseek-ai/dsh-hooks-claude-code": "0.2.1-rc.5",
     "@deepseek-harness-tui/dsh-tui": "0.18.0",
-    "@markishh/dsh-agents-md": "link:../../packages/dsh-agents-md",
-    "@markishh/dsh-commands-md": "link:../../packages/dsh-commands-md",
-    "@markishh/dsh-model-tiers": "link:../../packages/dsh-model-tiers",
-    "@markishh/dsh-task-tool": "link:../../packages/dsh-task-tool",
-    "@markishh/dsh-plugin-log": "link:../../packages/dsh-plugin-log",
-    "@markishh/dsh-hooks-approval": "link:../../packages/dsh-hooks-approval"
+    "@mdcode-cc/dsh-agents-md": "link:../../packages/dsh-agents-md",
+    "@mdcode-cc/dsh-commands-md": "link:../../packages/dsh-commands-md",
+    "@mdcode-cc/dsh-model-tiers": "link:../../packages/dsh-model-tiers",
+    "@mdcode-cc/dsh-task-tool": "link:../../packages/dsh-task-tool",
+    "@mdcode-cc/dsh-plugin-log": "link:../../packages/dsh-plugin-log",
+    "@mdcode-cc/dsh-hooks-approval": "link:../../packages/dsh-hooks-approval"
   },
   "dsh": {
     "profile": {

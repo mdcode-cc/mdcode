@@ -1,4 +1,4 @@
-# @markishh/dsh-plugin-log
+# @mdcode-cc/dsh-plugin-log
 
 A minimal cordis plugin: appends every `ctx.logger` message to a plain-text
 file, via `ctx.logger.exporter()` — the same API `dsh-app-boot` itself uses
