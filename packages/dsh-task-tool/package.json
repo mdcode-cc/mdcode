@@ -39,7 +39,7 @@
     "@deepseek-ai/dsh-token-meter": "0.2.1-rc.5",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.5",
     "@deepseek-ai/schemastery": "~3.18.4",
-    "@mdcode-cc/dsh-agents-md": "workspace:^"
+    "@mdcode-cc/dsh-agents-md": "^0.1.1"
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "3.18.5"
