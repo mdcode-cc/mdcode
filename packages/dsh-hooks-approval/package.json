@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-hooks-approval",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run the PermissionRequest (blocking approval relay) and SessionEnd command hooks from a Claude Code settings.json \u2014 the two hook events @deepseek-ai/dsh-hooks-claude-code does not bridge.",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-task-tool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Task delegation tool for dsh: spawns a named agent from the dsh-agents-md catalog, with a per-child context cap and a verification-loop guard.",
   "license": "MIT",
   "repository": {

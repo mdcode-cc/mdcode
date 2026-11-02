@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-commands-md",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Register Claude-Code-style markdown slash commands (.claude/commands/*.md) as dsh commands, with $ARGUMENTS substitution.",
   "license": "MIT",
   "repository": {

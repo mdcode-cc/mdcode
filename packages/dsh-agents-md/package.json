@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-agents-md",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Load Claude-Code-style agent definition files (.claude/agents/*.md) and register one dsh agent preset per agent.",
   "license": "MIT",
   "repository": {

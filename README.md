@@ -41,7 +41,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 
 3. **Install the six `@mdcode-cc/*` packages into the `cc` profile.**
 
-   **Once `0.1.0` is on npm** (not yet published — this is the intended route, not the verified
+   **Once `0.1.1` is on npm** (not yet published — this is the intended route, not the verified
    one):
 
    ```

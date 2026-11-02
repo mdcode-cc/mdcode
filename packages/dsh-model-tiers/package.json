@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-model-tiers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Resolve Claude-Code model tier names (haiku/sonnet/opus) to DeepSeek routes, log the resolved route per request, and retry protocol-level model failures.",
   "license": "MIT",
   "repository": {

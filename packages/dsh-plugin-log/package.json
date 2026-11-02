@@ -1,6 +1,6 @@
 {
   "name": "@mdcode-cc/dsh-plugin-log",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Append every ctx.logger message, optionally filtered by logger-name prefix, to a plain-text log file.",
   "license": "MIT",
   "repository": {
