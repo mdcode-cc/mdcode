@@ -139,6 +139,7 @@ else
   echo "profile cc composes cleanly"
 fi
 echo
+echo "First launch shows the TUI's own 4-step setup guide; the API key is already configured, so press Esc to skip it."
 echo "Launch:"
 if [ "$DSH_HOME" = "$HOME/.dsh" ]; then
   echo "  dsh --profile cc"
