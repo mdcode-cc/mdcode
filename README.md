@@ -61,6 +61,9 @@ scripts/setup-profile.sh [DSH_HOME]
 
 **What you'll see:**
 
+- The first launch opens the terminal UI's own four-step setup guide (accounts, language,
+  model, shortcuts). It belongs to the community TUI, not this project; the API key is already
+  configured, so press Esc to skip it. Re-run it any time with `/setup`.
 - In the `cc` TUI, `/` lists the commands loaded from `~/.claude/commands` and
   `~/.claude/skills`; agents from `~/.claude/agents` show up as `Task` subagent types.
 - `$DSH_HOME/logs/plugins.log` records plugin activity (registered commands, registered agent
