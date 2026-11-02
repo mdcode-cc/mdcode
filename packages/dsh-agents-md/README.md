@@ -411,7 +411,7 @@ module resolution instead of the host's own loader, so a **second copy** of
 rows — this plugin's and dsh-tui's own — mounted as global instead of scoped, which is exactly the
 "already registered" collision, once per row. `headless` never reproduced this because that
 profile has no `node_modules` of its own to shadow the host's copies with — which is also why the
-isolation proof below (disabling every `@markishh` row still left dsh-tui's own preset broken)
+isolation proof below (disabling every `@mdcode-cc` row still left dsh-tui's own preset broken)
 correctly ruled out this plugin's code without finding the real cause: the duplicate module was
 loaded by the *profile's* `package.json`, not by anything any preset-building plugin's row shape
 controls.
@@ -423,7 +423,7 @@ see `docs/DESIGN.md` §7 Q7 for the rest (the `cc-no-preset` row, the fork-provi
 rejected as Plan B, and the latent third-copy risk in `mdcode`'s own `node_modules`).
 
 The isolation proof from the dsh-task-tool integration round still stands as supporting evidence,
-just not as the explanation: disabling every `@markishh` row (including this one) left dsh-tui's
+just not as the explanation: disabling every `@mdcode-cc` row (including this one) left dsh-tui's
 own agent creation failing on this host the same way (see the `profiles/cc/cordis.patch.yml`
 "KNOWN DSH-TUI BOOT FAILURE" comment for the four-boot isolation table) — consistent with a
 duplicated module loaded once per profile boot, not with anything in this plugin's own rows.
