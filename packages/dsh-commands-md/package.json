@@ -5,10 +5,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markishh/mdcode.git",
+    "url": "git+https://github.com/mdcode-cc/mdcode.git",
     "directory": "packages/dsh-commands-md"
   },
-  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-commands-md#readme",
+  "homepage": "https://github.com/mdcode-cc/mdcode/tree/main/packages/dsh-commands-md#readme",
   "publishConfig": {
     "access": "public"
   },

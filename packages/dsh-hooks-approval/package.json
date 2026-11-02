@@ -5,10 +5,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markishh/mdcode.git",
+    "url": "git+https://github.com/mdcode-cc/mdcode.git",
     "directory": "packages/dsh-hooks-approval"
   },
-  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-hooks-approval#readme",
+  "homepage": "https://github.com/mdcode-cc/mdcode/tree/main/packages/dsh-hooks-approval#readme",
   "publishConfig": {
     "access": "public"
   },

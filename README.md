@@ -45,7 +45,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
    one):
 
    ```
-   git clone https://github.com/markishh/mdcode && cd mdcode
+   git clone https://github.com/mdcode-cc/mdcode && cd mdcode
    dsh plugin --profile cc add @markishh/dsh-agents-md @markishh/dsh-task-tool \
      @markishh/dsh-model-tiers @markishh/dsh-commands-md @markishh/dsh-plugin-log \
      @markishh/dsh-hooks-approval
@@ -54,7 +54,7 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
    **Today**, before that publish, the verified route is a git checkout with `link:` deps:
 
    ```
-   git clone https://github.com/markishh/mdcode && cd mdcode && pnpm install
+   git clone https://github.com/mdcode-cc/mdcode && cd mdcode && pnpm install
    scripts/setup-profile.sh [DSH_HOME]
    ```
 
