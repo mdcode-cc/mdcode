@@ -17,75 +17,56 @@ slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approv
 
 ## Quick start on a new machine
 
-1. **Install the harness.**
+```
+curl -fsSL https://raw.githubusercontent.com/mdcode-cc/mdcode/main/install.sh | bash
+```
 
-   ```
-   npm install -g @deepseek-ai/dsh@$(cat scripts/host.version)
-   ```
+What it does, in order (each step is idempotent, re-run any time):
 
-   Check it: `dsh --version` should print the same version as `scripts/host.version`.
+1. Checks Node >= 22 and npm are present.
+2. Ensures `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`, falling back to
+   `npm install -g pnpm`).
+3. Installs or upgrades the `dsh` host to the version pinned in `scripts/host.version` (skips if
+   `dsh --version` already matches).
+4. Creates `$DSH_HOME/profiles/cc` (`DSH_HOME` defaults to `~/.dsh`): fetches
+   `profiles/cc/cordis.patch.yml`, writes a `package.json` there with the six published
+   `@mdcode-cc/*` packages plus the host deps pinned in `profiles/cc/package.json`, writes a
+   `pnpm-workspace.yaml` that pre-approves the native deps' build scripts, and runs
+   `pnpm install`. An existing `package.json` is backed up with a timestamp first.
+5. Prompts for `DEEPSEEK_API_KEY` on `/dev/tty` (hidden input) if it isn't already exported or
+   stored in `$DSH_HOME/.env`, and appends it there (`chmod 600`). The host loads
+   `$DSH_HOME/.env` at boot, so no `export` is needed afterwards.
+6. Symlinks `~/.claude/CLAUDE.md` to `$DSH_HOME/AGENTS.md` (the global-rules file this harness
+   actually reads) if the former exists and the latter doesn't.
+7. Verifies with `dsh --profile cc --dump-config` and prints the launch command.
 
-2. **Export your DeepSeek API key.**
+Env var overrides: `MDCODE_VERSION` (default `0.1.1`), `DSH_VERSION` (default: read from
+`scripts/host.version`), `DSH_HOME` (default `~/.dsh`), `MDCODE_REF` (default `main`, which repo
+ref the raw URLs point at). Pass `--dry-run` to print the plan without changing anything.
 
-   ```
-   export DEEPSEEK_API_KEY=sk-...
-   ```
+Then launch:
 
-   No `$DSH_HOME/cordis.patch.yml` is required for this — confirmed on a scratch `DSH_HOME` with
-   no home-level patch at all. The `cc` profile's own `llm-deepseek` row
-   (`profiles/cc/cordis.patch.yml`) already sets `apiKeyEnv: DEEPSEEK_API_KEY`, and that's enough:
-   the `headless` profile reads the launch environment directly, and `cc`'s credentials service
-   (`dsh-credentials-local`) inherits the same env var when nothing is stored in
-   `$DSH_HOME/.credentials.yaml`. A home-level patch only matters once you want a *stored*
-   credential instead of an exported one.
+```
+dsh --profile cc                                       # TUI
+dsh --profile headless "reply with the single word OK"  # one-shot, no profile setup needed
+```
 
-3. **Install the six `@mdcode-cc/*` packages into the `cc` profile.**
+**From a git checkout** (development — `link:` deps into this clone instead of the published
+packages):
 
-   **From npm** (`0.1.1`, verified: a clean install into a scratch profile composed and activated on a real run):
+```
+git clone https://github.com/mdcode-cc/mdcode && cd mdcode && pnpm install
+scripts/setup-profile.sh [DSH_HOME]
+```
 
-   ```
-   git clone https://github.com/mdcode-cc/mdcode && cd mdcode
-   dsh plugin --profile cc add @mdcode-cc/dsh-agents-md @mdcode-cc/dsh-task-tool \
-     @mdcode-cc/dsh-model-tiers @mdcode-cc/dsh-commands-md @mdcode-cc/dsh-plugin-log \
-     @mdcode-cc/dsh-hooks-approval
-   ```
+**What you'll see:**
 
-   **From a git checkout** (for development, `link:` deps into this clone):
-
-   ```
-   git clone https://github.com/mdcode-cc/mdcode && cd mdcode && pnpm install
-   scripts/setup-profile.sh [DSH_HOME]
-   ```
-
-   `DSH_HOME` defaults to `~/.dsh`, same as `dsh` itself. The script copies
-   `profiles/cc/cordis.patch.yml` into `$DSH_HOME/profiles/cc/`, writes a `package.json` there with
-   the six `@mdcode-cc/*` deps as `link:` entries pointed at absolute paths into this checkout (a
-   profile resolves `link:` relative to its own `package.json`, not the repo root), writes a
-   `pnpm-workspace.yaml` that pre-approves the native deps' build scripts so `pnpm install` never
-   stops for an interactive prompt, runs that install, and prints the launch commands below.
-   Re-run it any time the checkout moves or the packages change — it's idempotent.
-
-4. **Launch.**
-
-   ```
-   DSH_HOME=<home> dsh --profile cc                                       # TUI
-   DSH_HOME=<home> dsh --profile headless "reply with the single word OK"  # one-shot
-   ```
-
-   `headless` doesn't need step 3 — it auto-initializes its own profile directory under
-   `$DSH_HOME/profiles/headless` on first run and never touches the `cc` profile at all.
-
-5. **What you'll see.**
-
-   - In the `cc` TUI, `/` lists the commands loaded from `~/.claude/commands` and
-     `~/.claude/skills`; agents from `~/.claude/agents` show up as `Task` subagent types.
-   - `$DSH_HOME/logs/plugins.log` records plugin activity (registered commands, registered agent
-     presets, warnings, errors) for both profiles.
-   - Three Claude Code inputs carry over as-is: `~/.claude/agents`, `~/.claude/commands` +
-     `~/.claude/skills`, and the hooks in `~/.claude/settings.json`.
-   - `$DSH_HOME/AGENTS.md` is the global-rules file this harness actually reads — symlink your
-     `~/.claude/CLAUDE.md` there (`ln -s ~/.claude/CLAUDE.md $DSH_HOME/AGENTS.md`) to carry it over
-     too.
+- In the `cc` TUI, `/` lists the commands loaded from `~/.claude/commands` and
+  `~/.claude/skills`; agents from `~/.claude/agents` show up as `Task` subagent types.
+- `$DSH_HOME/logs/plugins.log` records plugin activity (registered commands, registered agent
+  presets, warnings, errors) for both profiles.
+- Three Claude Code inputs carry over as-is: `~/.claude/agents`, `~/.claude/commands` +
+  `~/.claude/skills`, and the hooks in `~/.claude/settings.json`.
 
 ## Packages
 
