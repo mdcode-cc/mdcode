@@ -1,0 +1,16 @@
+{
+  "name": "mdcode",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DeepSeek Harness plugins that port a Claude-Code-grade terminal coding workflow onto DeepSeek models only.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "test": "bash -c 'shopt -s nullglob; f=(packages/*/test/*.test.js); if [ ${#f[@]} -eq 0 ]; then echo \"FAIL: no test files yet — a run with 0 tests is not a pass\"; exit 1; fi; node --test \"${f[@]}\"'",
+    "doctor": "bash scripts/doctor.sh"
+  }
+}

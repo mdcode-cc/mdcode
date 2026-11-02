@@ -1,0 +1,626 @@
+diff --git a/packages/experimental/hook-protocol/src/codec.ts b/packages/experimental/hook-protocol/src/codec.ts
+index 273e86f31..af0719b42 100644
+--- a/packages/experimental/hook-protocol/src/codec.ts
++++ b/packages/experimental/hook-protocol/src/codec.ts
+@@ -44,6 +44,17 @@ function permissionDecisionOf(value: string | undefined): HookOutput['decision']
+   return value === 'allow' || value === 'deny' || value === 'ask' ? value : undefined
+ }
+ 
++/**
++ * PermissionRequest's `hookSpecificOutput.decision` is a nested `{ behavior }`
++ * object (`allow`/`deny` only — no `ask`), unlike PreToolUse's flat
++ * `permissionDecision` string. Reuses the same `output.decision` enum.
++ */
++function permissionRequestBehaviorOf(value: unknown): HookOutput['decision'] {
++  const decision = obj(value)
++  const behavior = decision ? str(decision, 'behavior') : undefined
++  return behavior === 'allow' || behavior === 'deny' ? behavior : undefined
++}
++
+ /**
+  * Decode process output into a dialect-neutral hook outcome. This function is
+  * total: malformed JSON remains plain stdout. When `expectedEventName` is set,
+@@ -126,6 +137,12 @@ function applyStructured(output: HookOutput, parsed: Record<string, unknown>, ex
+     if (permission !== undefined) output.decision = permission
+     const permissionReason = str(hso, 'permissionDecisionReason')
+     if (permissionReason !== undefined) output.reason = permissionReason
++    // PermissionRequest's nested `decision.behavior` (see
++    // {@link permissionRequestBehaviorOf}) — distinct from the flat
++    // `permissionDecision` string above, and not collided with the top-level
++    // legacy `decision` field (that one lives on `parsed`, not `hso`).
++    const behavior = permissionRequestBehaviorOf(hso.decision)
++    if (behavior !== undefined) output.decision = behavior
+     const addCtx = str(hso, 'additionalContext')
+     if (addCtx !== undefined) output.additionalContext = addCtx
+     const updated = obj(hso.updatedInput)
+diff --git a/packages/experimental/hook-protocol/src/types.ts b/packages/experimental/hook-protocol/src/types.ts
+index 84fd04a21..1724725cc 100644
+--- a/packages/experimental/hook-protocol/src/types.ts
++++ b/packages/experimental/hook-protocol/src/types.ts
+@@ -107,14 +107,17 @@ export interface HookOutput {
+   /** Human-readable reason shown when {@link continue} is `false`. */
+   stopReason?: string
+   /**
+-   * The neutral blocking decision a hook expressed, folded from the two channels
++   * The neutral blocking decision a hook expressed, folded from three channels
+    * the reference protocols keep DISTINCT: the legacy top-level `decision`
+-   * (`approve`/`block` only) and `hookSpecificOutput.permissionDecision`
+-   * (`allow`/`deny`/`ask`). We normalize them to one enum — `'block'`/`'deny'`
++   * (`approve`/`block` only), `hookSpecificOutput.permissionDecision`
++   * (`allow`/`deny`/`ask`, PreToolUse's flat string), and
++   * `hookSpecificOutput.decision.behavior` (`allow`/`deny`, PermissionRequest's
++   * nested object). We normalize them to one enum — `'block'`/`'deny'`
+    * forbid, `'approve'`/`'allow'` permit, `'ask'` requests confirmation — but
+-   * `'allow'`/`'deny'`/`'ask'` arise ONLY from a `permissionDecision`, never from
+-   * a top-level `decision` (an out-of-band `{"decision":"deny"}` is invalid and
+-   * ignored, matching the schemas). Absent ⇒ no explicit decision (exit code governs).
++   * `'allow'`/`'deny'`/`'ask'` arise ONLY from one of those two
++   * `hookSpecificOutput` shapes, never from a top-level `decision` (an
++   * out-of-band `{"decision":"deny"}` is invalid and ignored, matching the
++   * schemas). Absent ⇒ no explicit decision (exit code governs).
+    */
+   decision?: 'approve' | 'allow' | 'block' | 'deny' | 'ask'
+   /** The reason/explanation accompanying {@link decision}. */
+diff --git a/packages/experimental/hook-protocol/tests/codec.spec.ts b/packages/experimental/hook-protocol/tests/codec.spec.ts
+index 252caa4cf..88850b10b 100644
+--- a/packages/experimental/hook-protocol/tests/codec.spec.ts
++++ b/packages/experimental/hook-protocol/tests/codec.spec.ts
+@@ -80,6 +80,21 @@ describe('parseHookOutput — structured stdout (exit 0 only)', () => {
+     expect(parseHookOutput(0, JSON.stringify({ hookSpecificOutput: { permissionDecision: 'ask' } }), '').decision).toBe('ask')
+   })
+ 
++  it('parses PermissionRequest\'s nested hookSpecificOutput.decision.behavior (allow/deny only)', () => {
++    expect(parseHookOutput(0, JSON.stringify({ hookSpecificOutput: { decision: { behavior: 'allow' } } }), '').decision).toBe('allow')
++    expect(parseHookOutput(0, JSON.stringify({ hookSpecificOutput: { decision: { behavior: 'deny' } } }), '').decision).toBe('deny')
++    // No 'ask' in this shape — an unrecognized behavior (or a string, not an object) is ignored.
++    expect(parseHookOutput(0, JSON.stringify({ hookSpecificOutput: { decision: { behavior: 'ask' } } }), '').decision).toBeUndefined()
++    expect(parseHookOutput(0, JSON.stringify({ hookSpecificOutput: { decision: 'allow' } }), '').decision).toBeUndefined()
++  })
++
++  it('hookSpecificOutput.decision.behavior OVERRIDES permissionDecision when both are present', () => {
++    const out = parseHookOutput(0, JSON.stringify({
++      hookSpecificOutput: { permissionDecision: 'ask', decision: { behavior: 'deny' } },
++    }), '')
++    expect(out.decision).toBe('deny')
++  })
++
+   it('parses additionalContext and updatedInput from hookSpecificOutput', () => {
+     const out = parseHookOutput(0, JSON.stringify({
+       hookSpecificOutput: { additionalContext: 'remember X', updatedInput: { command: 'safe' } },
+diff --git a/packages/experimental/hooks-claude-code/README.md b/packages/experimental/hooks-claude-code/README.md
+index 97dd24d8d..cfb7b430b 100644
+--- a/packages/experimental/hooks-claude-code/README.md
++++ b/packages/experimental/hooks-claude-code/README.md
+@@ -61,9 +61,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
+ | `UserPromptSubmit` | when the agent receives a prompt | block the prompt, or attach extra context |
+ | `PreToolUse` | before a tool runs | block the tool, or ask for approval before it runs |
+ | `PostToolUse` | after a tool runs | block the result with feedback, or attach extra context |
++| `PermissionRequest` | when something else already asked for an approval decision | allow or deny that decision |
+ | `Stop` | when the run is about to stop | force another step with a reason |
+ | `SubagentStart` | when a subagent starts | attach context to a still-running subagent (in-process only) |
+ | `SubagentStop` | when a subagent ends | observe only — cannot block or add context |
++| `SessionEnd` | when a session is disposed | observe only — cannot block or add context |
+ 
+ ### How hooks run and fail
+ 
+@@ -86,19 +88,19 @@ This section explains the design decisions behind the bridge and points at the c
+ 
+ ### Hook point mapping
+ 
+-Each supported event programs against one harness extension point: `SessionStart` adds context through awaited `agent/created` initialization before the first turn, `UserPromptSubmit` and `PreToolUse` are waterfalls that can reject the incoming action (`agent/pre-step`, `tools/pre-execute`), `PostToolUse` is a waterfall that can block with feedback or add context to the downstream decision (`tools/post-execute`), and `Stop` is a serial listener whose blocking result forces another step through `steer()` (`agent/turn-stopping`). The two subagent events emit into the child lifecycle (`subagent/start`, `subagent/end`): start injects context into a live in-process child, stop observes only. Context-only hooks always delegate via `next()` before folding a sourced message into the downstream decision, so a later listener can still reject or rewrite; blocking decisions map to `deny` (`ask` for `PreToolUse`). The per-event wiring lives in [`src/index.ts`](src/index.ts).
++Each supported event programs against one harness extension point: `SessionStart` adds context through awaited `agent/created` initialization before the first turn, `UserPromptSubmit` and `PreToolUse` are waterfalls that can reject the incoming action (`agent/pre-step`, `tools/pre-execute`), `PostToolUse` is a waterfall that can block with feedback or add context to the downstream decision (`tools/post-execute`), `PermissionRequest` is a waterfall on the `dsh-user-approval` seam that answers an already-pending approval decision (`approval/request`), and `Stop` is a serial listener whose blocking result forces another step through `steer()` (`agent/turn-stopping`). The two subagent events emit into the child lifecycle (`subagent/start`, `subagent/end`): start injects context into a live in-process child, stop observes only. `SessionEnd` emits on session teardown (`session/disposed`) and observes only. Context-only hooks always delegate via `next()` before folding a sourced message into the downstream decision, so a later listener can still reject or rewrite; blocking decisions map to `deny` (`ask` for `PreToolUse`); `PermissionRequest` maps its own `allow`/`deny` directly to the approval seam's `allowed-once`/`rejected` and otherwise delegates via `next()`. The per-event wiring lives in [`src/index.ts`](src/index.ts).
+ 
+ ### Payloads and environment
+ 
+-The bridge builds each event's stdin payload from a base of `session_id`, string-shaped `transcript_path`, `cwd`, and `hook_event_name` plus per-event fields. `transcript_path` stays in the payload for compatibility but is always `''`: the persistence seam exposes no artifact paths, and the default Zstandard-compressed session log is not readable by hook scripts. `CLAUDE_PROJECT_DIR` defaults per-run to the session workspace when `projectDir` is omitted, matching the directory the hook runs in; `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PROJECT_DIR}` substitution happens at config parse time.
++The bridge builds each event's stdin payload from a base of `session_id`, string-shaped `transcript_path`, `cwd`, and `hook_event_name` plus per-event fields. `transcript_path` stays in the payload for compatibility but is always `''`: the persistence seam exposes no artifact paths, and the default Zstandard-compressed session log is not readable by hook scripts. `CLAUDE_PROJECT_DIR` defaults per-run to the session workspace when `projectDir` is omitted, matching the directory the hook runs in; `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PROJECT_DIR}` substitution happens at config parse time. `PermissionRequest` adds `tool_name`, `tool_input`, and `tool_use_id` from the pending approval request (`tool_input` is only as good as what the asker attached — see the approval package's own "no tool arguments" limitation note). `SessionEnd` fires after its session already left the live registry, so it has no Agent to route through: `cwd` falls back to the process cwd instead of the session's own, and the hook gets no `hook/invoked`/`hook/result` audit pair.
+ 
+ ### Matcher subjects and serial execution
+ 
+-The matcher subject is the tool name (`PreToolUse` / `PostToolUse`), the session source (`SessionStart`), or the constant `agent_type` `general-purpose` (`SubagentStart` / `SubagentStop` — the subagent seam carries no per-kind label); `UserPromptSubmit` and `Stop` ignore matchers. Matched hooks run serially in config order, which keeps each hook's `hook/invoked` / `hook/result` pair adjacent in the log, and the most-restrictive fold is order-independent (`deny > ask > allow`).
++The matcher subject is the tool name (`PreToolUse` / `PostToolUse` / `PermissionRequest`), the session source (`SessionStart`), or the constant `agent_type` `general-purpose` (`SubagentStart` / `SubagentStop` — the subagent seam carries no per-kind label); `UserPromptSubmit`, `Stop`, and `SessionEnd` ignore matchers. Matched hooks run serially in config order, which keeps each hook's `hook/invoked` / `hook/result` pair adjacent in the log, and the most-restrictive fold is order-independent (`deny > ask > allow`).
+ 
+ ### Detached runs and disposal
+ 
+-The three emit points (`SessionStart`, `SubagentStart`, `SubagentStop`) run detached — no extension point awaits them. Each run chain is tracked, and disposing the bridge aborts still-running hook processes, then drains the continuations before the dispose resolves (`createDetachedRuns` in `dsh-hook-protocol`).
++Four emit points (`SessionStart`, `SubagentStart`, `SubagentStop`, `SessionEnd`) run detached — no extension point awaits them. `PermissionRequest` is awaited instead: it answers the `approval/request` waterfall directly, so its caller (the asker, e.g. `dsh-tools`' approval gate) blocks on the outcome. Each detached run chain is tracked, and disposing the bridge aborts still-running hook processes, then drains the continuations before the dispose resolves (`createDetachedRuns` in `dsh-hook-protocol`).
+ 
+ ### Design philosophy
+ 
+@@ -172,13 +174,15 @@ A blocked prompt sends no request and invalidates nothing. Denial, feedback, and
+ 
+ These limits describe what your Claude Code hooks cannot do through this bridge yet, and where behavior differs from the reference tool. They are current package constraints, not a task backlog.
+ 
+-- **Unsupported hook events (23 of Claude Code's current 30)** — `Setup`, `InstructionsLoaded`, `UserPromptExpansion`, `MessageDisplay`, `PermissionRequest`, `PostToolUseFailure`, `PostToolBatch`, `PermissionDenied`, `Notification`, `TaskCreated`, `TaskCompleted`, `StopFailure`, `TeammateIdle`, `ConfigChange`, `CwdChanged`, `FileChanged`, `WorktreeCreate`, `WorktreeRemove`, `PreCompact`, `PostCompact`, `SessionEnd`, `Elicitation`, and `ElicitationResult`. Config for these events is ignored before group parsing, so an unsupported event cannot invalidate or register hooks. The comparison baseline is Claude Code's [official hook-event reference](https://code.claude.com/docs/en/hooks#hook-events).
++- **Unsupported hook events (21 of Claude Code's current 30)** — `Setup`, `InstructionsLoaded`, `UserPromptExpansion`, `MessageDisplay`, `PostToolUseFailure`, `PostToolBatch`, `PermissionDenied`, `Notification`, `TaskCreated`, `TaskCompleted`, `StopFailure`, `TeammateIdle`, `ConfigChange`, `CwdChanged`, `FileChanged`, `WorktreeCreate`, `WorktreeRemove`, `PreCompact`, `PostCompact`, `Elicitation`, and `ElicitationResult`. Config for these events is ignored before group parsing, so an unsupported event cannot invalidate or register hooks. The comparison baseline is Claude Code's [official hook-event reference](https://code.claude.com/docs/en/hooks#hook-events).
+ - **`SessionStart` is partial** — JSON `additionalContext` is consumed, but plain stdout context, `initialUserMessage`, `sessionTitle`, `watchPaths`, `reloadSkills`, and `CLAUDE_ENV_FILE` are unsupported. The hook runs detached, so context can miss the first request, and the payload omits optional fields such as `model`, `agent_type`, and `session_title`.
+ - **`UserPromptSubmit` is partial** — blocking and JSON `additionalContext` work, but plain stdout context, `sessionTitle`, and `suppressOriginalPrompt` are unsupported. Unless overridden, the bridge also uses its 600-second default instead of Claude Code's event-specific 30-second command timeout.
+ - **`PreToolUse` is partial** — `deny` and `ask` decisions work; `allow` does not pre-approve, `defer` is unsupported, `additionalContext` is ignored, and `updatedInput` is logged + warned but not honored ([the pre-tool-input-rewrite Agent Note](../../../.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.md)).
+ - **`PostToolUse` is partial** — blocking feedback and JSON `additionalContext` work, but `updatedToolOutput` and `updatedMCPToolOutput` are unsupported and `tool_response` is flattened to text.
++- **`PermissionRequest` is partial** — it only fires when something else already asked the `dsh-user-approval` seam for a decision (typically a `PreToolUse` hook's own `ask`), not at every point Claude Code would raise one; `hookSpecificOutput.decision.behavior` of `allow`/`deny` maps to `allowed-once`/`rejected`, any other value (or no decision) delegates to the next composed answerer, and `updatedInput`/`message` on that `decision` object are not honored or surfaced.
+ - **`SubagentStart` and `SubagentStop` are partial** — both report a constant `agent_type` of `general-purpose` and use the child session id where Claude Code reports the parent session. Start context is best-effort and can only reach a live in-process child; stop is observe-only and cannot block the subagent or feed it context. Stop omits `agent_transcript_path`, `last_assistant_message`, `background_tasks`, and `session_crons` and always reports `stop_hook_active: false`.
+ - **`Stop` is partial** — blocking forces another model turn, but `stop_hook_active` is always `false`, `last_assistant_message`, `background_tasks`, and `session_crons` are omitted, and the consecutive-block cap is not implemented. An unconditionally blocking hook therefore force-continues every step unless it self-limits.
++- **`SessionEnd` is partial** — observe-only (there is nothing to block or add context to), always reports `reason: 'other'` because the harness's disposal path does not track Claude Code's taxonomy (`clear`/`logout`/`prompt_input_exit`/`other`), and runs with no Agent: `cwd` falls back to the process cwd and the hook gets no `hook/invoked`/`hook/result` audit pair.
+ - **Common payload and output fields are partial** — mapped event payloads omit `prompt_id`, `permission_mode`, and `effort` where Claude Code would provide them, and `transcript_path` is never populated: it is always the empty string, because the persistence seam exposes no artifact paths and the default Zstandard-compressed session log is not readable by hook scripts. `systemMessage` is logged + warned but not surfaced; `{"continue": false}` is recorded but does not halt the run; `suppressOutput`, `stopReason`, and `terminalSequence` are not applied.
+ - **Handler and config support is partial** — only shell-form command handlers run. `http`, `mcp_tool`, `prompt`, and `agent` handlers are skipped; command-handler options such as `args`, `async`, `asyncRewake`, `shell`, `if`, `once`, and `statusMessage` are not honored. Matching handlers run serially and are not deduplicated, whereas Claude Code runs them in parallel and deduplicates identical handlers. One process-level `configPath` is parsed once at load; Claude Code's layered project, user, plugin, and policy discovery and live reload are not implemented.
+ 
+diff --git a/packages/experimental/hooks-claude-code/README.zh.md b/packages/experimental/hooks-claude-code/README.zh.md
+index 829ddd92b..a28caac5e 100644
+--- a/packages/experimental/hooks-claude-code/README.zh.md
++++ b/packages/experimental/hooks-claude-code/README.zh.md
+@@ -61,9 +61,11 @@ kind: "package-reference"
+ | `UserPromptSubmit` | agent 收到提示词时 | 阻塞提示词，或附加上下文 |
+ | `PreToolUse` | 工具运行前 | 阻塞工具，或在运行前请求批准 |
+ | `PostToolUse` | 工具运行后 | 带反馈阻塞结果，或附加上下文 |
++| `PermissionRequest` | 其他环节已在请求批准决策时 | 批准或拒绝该决策 |
+ | `Stop` | 运行即将停止时 | 带原因强制再执行一步 |
+ | `SubagentStart` | subagent 启动时 | 向仍在运行的 subagent 附加上下文（仅限同进程） |
+ | `SubagentStop` | subagent 结束时 | 只观测——不能阻塞或添加上下文 |
++| `SessionEnd` | 会话被释放时 | 只观测——不能阻塞或添加上下文 |
+ 
+ ### 钩子如何运行与失败
+ 
+@@ -86,19 +88,19 @@ kind: "package-reference"
+ 
+ ### Hook 点映射
+ 
+-每个受支持事件都面向一个 harness 扩展点：`SessionStart` 在首个轮次前通过需等待的 `agent/created` 初始化加入上下文，`UserPromptSubmit` 与 `PreToolUse` 是能拒绝传入动作的 waterfall（瀑布式事件）（`agent/pre-step`、`tools/pre-execute`），`PostToolUse` 是能带反馈阻塞或向下游决策添加上下文的 waterfall（`tools/post-execute`），`Stop` 是串行监听器，其阻塞结果通过 `steer()` 强制再执行一步（`agent/turn-stopping`）。两个 subagent 事件面向 child 生命周期发射（`subagent/start`、`subagent/end`）：start 向仍在运行的同进程 child 注入上下文，stop 只观测。仅提供上下文的 hook 总是先通过 `next()` 委托，再把带来源的消息折叠进下游决策，因此后续监听器仍可拒绝或改写；阻塞决策映射为 `deny`（`PreToolUse` 为 `ask`）。逐事件接线位于 [`src/index.ts`](src/index.ts)。
++每个受支持事件都面向一个 harness 扩展点：`SessionStart` 在首个轮次前通过需等待的 `agent/created` 初始化加入上下文，`UserPromptSubmit` 与 `PreToolUse` 是能拒绝传入动作的 waterfall（瀑布式事件）（`agent/pre-step`、`tools/pre-execute`），`PostToolUse` 是能带反馈阻塞或向下游决策添加上下文的 waterfall（`tools/post-execute`），`PermissionRequest` 是 `dsh-user-approval` seam 上的 waterfall，用于回答一个已经待决的批准决策（`approval/request`），`Stop` 是串行监听器，其阻塞结果通过 `steer()` 强制再执行一步（`agent/turn-stopping`）。两个 subagent 事件面向 child 生命周期发射（`subagent/start`、`subagent/end`）：start 向仍在运行的同进程 child 注入上下文，stop 只观测。`SessionEnd` 在会话释放时发射（`session/disposed`），且只观测。仅提供上下文的 hook 总是先通过 `next()` 委托，再把带来源的消息折叠进下游决策，因此后续监听器仍可拒绝或改写；阻塞决策映射为 `deny`（`PreToolUse` 为 `ask`）；`PermissionRequest` 将自己的 `allow`/`deny` 直接映射为批准 seam 的 `allowed-once`/`rejected`，否则通过 `next()` 委托。逐事件接线位于 [`src/index.ts`](src/index.ts)。
+ 
+ ### 载荷与环境
+ 
+-桥接从 `session_id`、字符串形态的 `transcript_path`、`cwd` 与 `hook_event_name` 的基础字段加逐事件字段构建每个事件的 stdin payload。`transcript_path` 出于兼容性保留在 payload 中，但始终为 `''`：持久化 seam 不暴露产物路径，且默认使用 Zstandard 压缩的会话日志无法被 hook 脚本读取。省略 `projectDir` 时，`CLAUDE_PROJECT_DIR` 按次默认到会话工作区，与钩子运行的目录一致；`${CLAUDE_PLUGIN_ROOT}` 与 `${CLAUDE_PROJECT_DIR}` 替换在配置解析时进行。
++桥接从 `session_id`、字符串形态的 `transcript_path`、`cwd` 与 `hook_event_name` 的基础字段加逐事件字段构建每个事件的 stdin payload。`transcript_path` 出于兼容性保留在 payload 中，但始终为 `''`：持久化 seam 不暴露产物路径，且默认使用 Zstandard 压缩的会话日志无法被 hook 脚本读取。省略 `projectDir` 时，`CLAUDE_PROJECT_DIR` 按次默认到会话工作区，与钩子运行的目录一致；`${CLAUDE_PLUGIN_ROOT}` 与 `${CLAUDE_PROJECT_DIR}` 替换在配置解析时进行。`PermissionRequest` 会从待决批准请求中添加 `tool_name`、`tool_input` 与 `tool_use_id`（`tool_input` 的完整程度取决于请求方是否附带了它——参见批准包自身关于“不携带工具参数”限制的说明）。`SessionEnd` 在其会话已离开存活注册表之后才触发，因此没有 Agent 可供路由：`cwd` 回退为进程 cwd 而非会话自身的 cwd，且该 hook 不会获得 `hook/invoked`／`hook/result` 审计配对。
+ 
+ ### Matcher subject 与串行执行
+ 
+-matcher subject 是工具名称（`PreToolUse`／`PostToolUse`）、会话源（`SessionStart`），或常量 `agent_type` `general-purpose`（`SubagentStart`／`SubagentStop`——subagent seam 不携带每 kind 标签）；`UserPromptSubmit` 与 `Stop` 忽略 matcher。匹配 hook 按配置顺序串行运行，这使每个 hook 的 `hook/invoked`／`hook/result` 对在日志中相邻，且最严格折叠与顺序无关（`deny > ask > allow`）。
++matcher subject 是工具名称（`PreToolUse`／`PostToolUse`／`PermissionRequest`）、会话源（`SessionStart`），或常量 `agent_type` `general-purpose`（`SubagentStart`／`SubagentStop`——subagent seam 不携带每 kind 标签）；`UserPromptSubmit`、`Stop` 与 `SessionEnd` 忽略 matcher。匹配 hook 按配置顺序串行运行，这使每个 hook 的 `hook/invoked`／`hook/result` 对在日志中相邻，且最严格折叠与顺序无关（`deny > ask > allow`）。
+ 
+ ### 脱离运行与释放
+ 
+-三个 emit 点（`SessionStart`、`SubagentStart`、`SubagentStop`）以脱离方式运行——没有扩展点等待它们。每条运行链都会被跟踪，对桥接执行 dispose（资源释放）时会中止仍在运行的 hook 进程，并在 dispose 完成前排空 continuation（`createDetachedRuns`，位于 `dsh-hook-protocol`）。
++四个 emit 点（`SessionStart`、`SubagentStart`、`SubagentStop`、`SessionEnd`）以脱离方式运行——没有扩展点等待它们。`PermissionRequest` 则相反，它会被等待：它直接回答 `approval/request` waterfall，因此其调用方（提问方，例如 `dsh-tools` 的批准把关）会阻塞等待结果。每条脱离运行链都会被跟踪，对桥接执行 dispose（资源释放）时会中止仍在运行的 hook 进程，并在 dispose 完成前排空 continuation（`createDetachedRuns`，位于 `dsh-hook-protocol`）。
+ 
+ ### 设计理念
+ 
+@@ -172,13 +174,15 @@ hook 不返回上下文时没有成本。Hook 文本取决于数据，会被记
+ 
+ 这些限制描述你的 Claude Code 钩子目前还无法通过本桥接做到的事情，以及行为与参考工具的差异。它们是当前包约束，而非任务积压。
+ 
+-- **不支持的 hook 事件（Claude Code 当前 30 项中的 23 项）**——`Setup`、`InstructionsLoaded`、`UserPromptExpansion`、`MessageDisplay`、`PermissionRequest`、`PostToolUseFailure`、`PostToolBatch`、`PermissionDenied`、`Notification`、`TaskCreated`、`TaskCompleted`、`StopFailure`、`TeammateIdle`、`ConfigChange`、`CwdChanged`、`FileChanged`、`WorktreeCreate`、`WorktreeRemove`、`PreCompact`、`PostCompact`、`SessionEnd`、`Elicitation` 与 `ElicitationResult`。这些事件的配置会在配置组解析前被忽略，因此不支持的事件既不会使配置失效，也不会注册 hook。比较基线是 Claude Code [官方 hook 事件参考](https://code.claude.com/docs/en/hooks#hook-events)。
++- **不支持的 hook 事件（Claude Code 当前 30 项中的 21 项）**——`Setup`、`InstructionsLoaded`、`UserPromptExpansion`、`MessageDisplay`、`PostToolUseFailure`、`PostToolBatch`、`PermissionDenied`、`Notification`、`TaskCreated`、`TaskCompleted`、`StopFailure`、`TeammateIdle`、`ConfigChange`、`CwdChanged`、`FileChanged`、`WorktreeCreate`、`WorktreeRemove`、`PreCompact`、`PostCompact`、`Elicitation` 与 `ElicitationResult`。这些事件的配置会在配置组解析前被忽略，因此不支持的事件既不会使配置失效，也不会注册 hook。比较基线是 Claude Code [官方 hook 事件参考](https://code.claude.com/docs/en/hooks#hook-events)。
+ - **`SessionStart` 只支持部分功能**——会消费 JSON `additionalContext`，但不支持纯 stdout 上下文、`initialUserMessage`、`sessionTitle`、`watchPaths`、`reloadSkills` 与 `CLAUDE_ENV_FILE`。hook 脱离运行，因此上下文可能错过第一个请求，payload 会省略 `model`、`agent_type` 与 `session_title` 等可选字段。
+ - **`UserPromptSubmit` 只支持部分功能**——支持阻塞与 JSON `additionalContext`，但不支持纯 stdout 上下文、`sessionTitle` 与 `suppressOriginalPrompt`。除非被覆盖，否则桥接还会使用自身 600 秒默认值，而非 Claude Code 的事件特定 30 秒 command 超时。
+ - **`PreToolUse` 只支持部分功能**——`deny` 与 `ask` 决策可用；`allow` 不会预审批，`defer` 不受支持，`additionalContext` 会被忽略，`updatedInput` 会被记录 + 警告但不应用（见 [pre-tool-input-rewrite Agent Note](../../../.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.zh.md)）。
+ - **`PostToolUse` 只支持部分功能**——支持阻塞反馈与 JSON `additionalContext`，但不支持 `updatedToolOutput` 与 `updatedMCPToolOutput`，`tool_response` 会展平为文本。
++- **`PermissionRequest` 只支持部分功能**——只有当其他环节已经向 `dsh-user-approval` seam 请求过决策时（通常是某个 `PreToolUse` hook 自身的 `ask`）才会触发，并非 Claude Code 会提出批准请求的每个时点；`hookSpecificOutput.decision.behavior` 的 `allow`／`deny` 会映射为 `allowed-once`／`rejected`，其他任何值（或没有决策）都委托给链中下一个已组合的应答者，且该 `decision` 对象上的 `updatedInput`／`message` 不会被遵循或呈现。
+ - **`SubagentStart` 与 `SubagentStop` 只支持部分功能**——两者均报告常量 `agent_type` `general-purpose`，并在 Claude Code 报告父会话的位置使用 child 会话 id。Start 上下文是尽力而为，且只能到达仍在运行的同进程 child；stop 只观测，无法阻塞 subagent 或向其提供上下文。Stop 省略 `agent_transcript_path`、`last_assistant_message`、`background_tasks` 与 `session_crons`，并始终报告 `stop_hook_active: false`。
+ - **`Stop` 只支持部分功能**——阻塞会强制另一个模型轮次，但 `stop_hook_active` 始终为 `false`，会省略 `last_assistant_message`、`background_tasks` 与 `session_crons`，且未实现连续阻塞上限。因此，无条件阻塞 hook 会在每个步骤中强制 continuation，除非它自我限制。
++- **`SessionEnd` 只支持部分功能**——只能观测（没有可阻塞或可添加上下文的对象），始终报告 `reason: 'other'`，因为 harness 的释放路径不会记录 Claude Code 的分类（`clear`／`logout`／`prompt_input_exit`／`other`），且运行时没有 Agent：`cwd` 回退为进程 cwd，该 hook 不会获得 `hook/invoked`／`hook/result` 审计配对。
+ - **通用 payload 与输出字段只支持部分功能**——已映射事件会省略 Claude Code 原本会提供的 `prompt_id`、`permission_mode` 与 `effort`，且 `transcript_path` 永不填充：它始终为空字符串，因为持久化 seam 不暴露产物路径，且默认使用 Zstandard 压缩的会话日志无法被 hook 脚本读取。`systemMessage` 会被记录 + 警告但不呈现；`{"continue": false}` 会被记录但不会停止运行；`suppressOutput`、`stopReason` 与 `terminalSequence` 不会被应用。
+ - **Handler 与配置只支持部分功能**——只运行 shell 形态 command handler。会跳过 `http`、`mcp_tool`、`prompt` 与 `agent` handler；`args`、`async`、`asyncRewake`、`shell`、`if`、`once` 与 `statusMessage` 等 command handler 选项不会被遵循。匹配 handler 串行运行且不去重，而 Claude Code 会并行运行并对相同 handler 去重。一个进程级 `configPath` 会在加载时解析一次；尚未实现 Claude Code 的分层项目、用户、插件与策略发现以及实时重新加载。
+ 
+diff --git a/packages/experimental/hooks-claude-code/package.json b/packages/experimental/hooks-claude-code/package.json
+index d5862a708..5d85e5d6c 100644
+--- a/packages/experimental/hooks-claude-code/package.json
++++ b/packages/experimental/hooks-claude-code/package.json
+@@ -38,7 +38,8 @@
+     "@deepseek-ai/dsh-tools": "workspace:*",
+     "@deepseek-ai/cordis": "workspace:~",
+     "@deepseek-ai/dsh-session-projection": "workspace:*",
+-    "@deepseek-ai/dsh-working-directory": "workspace:*"
++    "@deepseek-ai/dsh-working-directory": "workspace:*",
++    "@deepseek-ai/dsh-user-approval": "workspace:*"
+   },
+   "devDependencies": {
+     "@deepseek-ai/dsh-agent": "workspace:*",
+@@ -56,6 +57,7 @@
+     "@deepseek-ai/cordis": "workspace:~",
+     "@deepseek-ai/dsh-session-projection": "workspace:*",
+     "@deepseek-ai/dsh-working-directory": "workspace:*",
+-    "@deepseek-ai/dsh-fs-local": "workspace:*"
++    "@deepseek-ai/dsh-fs-local": "workspace:*",
++    "@deepseek-ai/dsh-user-approval": "workspace:*"
+   }
+ }
+diff --git a/packages/experimental/hooks-claude-code/src/config.ts b/packages/experimental/hooks-claude-code/src/config.ts
+index 72bd55bfd..5dd4682f3 100644
+--- a/packages/experimental/hooks-claude-code/src/config.ts
++++ b/packages/experimental/hooks-claude-code/src/config.ts
+@@ -13,9 +13,11 @@ const CLAUDE_EVENTS = [
+   'UserPromptSubmit',
+   'PreToolUse',
+   'PostToolUse',
++  'PermissionRequest',
+   'Stop',
+   'SubagentStart',
+   'SubagentStop',
++  'SessionEnd',
+ ] as const
+ 
+ /** A parsed CC config: event name → its matcher groups (command hooks only). */
+@@ -65,8 +67,8 @@ export function substituteCommand(command: string, vars: SubstitutionVars): stri
+  * Parse either a settings `hooks` value or a bare `hooks.json` event map. Malformed entries are
+  * ignored rather than failing boot; unsupported events are ignored before their groups are parsed,
+  * non-command hooks are returned in `skipped`, and substitutions are applied to every surviving
+- * command. Matcher fields on UserPromptSubmit and Stop are discarded because those events have no
+- * matcher subject. A matcher-bearing supported runnable group with an invalid regex throws a
++ * command. Matcher fields on UserPromptSubmit, Stop, and SessionEnd are discarded because those
++ * events have no matcher subject. A matcher-bearing supported runnable group with an invalid regex throws a
+  * `SyntaxError`, allowing the bridge to reject the complete config before listener registration.
+  *
+  * @param raw - the parsed JSON config: a settings object with a `hooks` key, or the bare
+@@ -106,7 +108,7 @@ export function parseClaudeCodeConfig(raw: unknown, vars: SubstitutionVars = {})
+         })
+       }
+       if (commands.length === 0) continue
+-      const matcher = event === 'UserPromptSubmit' || event === 'Stop'
++      const matcher = event === 'UserPromptSubmit' || event === 'Stop' || event === 'SessionEnd'
+         ? undefined
+         : typeof group.matcher === 'string' ? group.matcher : undefined
+       const diagnostic = matcherDiagnostic(matcher, 'claude-code')
+diff --git a/packages/experimental/hooks-claude-code/src/index.ts b/packages/experimental/hooks-claude-code/src/index.ts
+index afbc60de0..4d7a2a5ee 100644
+--- a/packages/experimental/hooks-claude-code/src/index.ts
++++ b/packages/experimental/hooks-claude-code/src/index.ts
+@@ -1,8 +1,9 @@
+ /**
+  * Bridge for unmodified Claude Code command hooks on harness interception
+- * extension points. It supports SessionStart, prompt/tool pre/post, Stop, and subagent
+- * start/stop. It owns Claude payloads, environment, substitution, and decision
+- * mapping; shared execution and parsing live in `dsh-hook-protocol`.
++ * extension points. It supports SessionStart, prompt/tool pre/post, Stop,
++ * subagent start/stop, permission requests, and session end. It owns Claude
++ * payloads, environment, substitution, and decision mapping; shared execution
++ * and parsing live in `dsh-hook-protocol`.
+  * `updatedInput` is logged and warned but not honored. Bespoke behavior should
+  * use typed native plugins on the same extension points.
+  * @module @deepseek-ai/dsh-hooks-claude-code
+@@ -23,8 +24,13 @@ declare module '@deepseek-ai/dsh-llm' {
+ }
+ 
+ import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
+-import type { UserMessage } from '@deepseek-ai/dsh-session'
++import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
+ import type { PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
++// Pulls in the declaration-merged `approval/request` waterfall and its types.
++// `ApprovalRequest` (not the narrower `ApprovalRequestEvent`, which this
++// package does not re-export from its main entry) — the two are structurally
++// identical for our purposes.
++import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
+ import {
+   appendHookInvoked,
+   appendHookResult,
+@@ -270,6 +276,20 @@ export function apply(ctx: Context, config: Config): void {
+     }
+   })
+ 
++  // --- PermissionRequest → ApprovalOutcome. Fires on the dsh-user-approval
++  // waterfall AFTER some other seam (typically PreToolUse `ask`) already asked
++  // for a decision; matcher subject is the tool name. A hook that answers
++  // neither `allow` nor `deny` delegates via `next()` so a later answerer in
++  // the composed chain still gets a turn. ---
++  ctx.on('approval/request', async (req, next): Promise<ApprovalOutcome> => {
++    const turn = lastTurn(ctx, req.agent)
++    const signal = req.signal === undefined ? detached.signal : AbortSignal.any([req.signal, detached.signal])
++    const merged = await runPoint('PermissionRequest', req.toolName, permissionRequestPayload(req), { agent: req.agent, turn, signal })
++    if (merged.decision === 'allow') return 'allowed-once'
++    if (merged.decision === 'deny') return 'rejected'
++    return next()
++  })
++
+   // A blocking Stop hook steers at the stopping boundary, which makes the
+   // machine observe pending input and run another step.
+   // TODO(stop-loop-guard): cap consecutive forced continuations; hooks must self-limit meanwhile.
+@@ -301,6 +321,18 @@ export function apply(ctx: Context, config: Config): void {
+     detached.track(runPoint('SubagentStop', SUBAGENT_TYPE, subagentPayload('SubagentStop', info, child), { ...child ? { agent: child, directory: 'committed' } : {}, signal: detached.signal })
+       .catch((error: unknown) => { ctx.logger.warn(`hooks-claude-code: SubagentStop hook failed: ${String(error)}`) }))
+   })
++
++  // SessionEnd fires after the session is already removed from the live
++  // registry (no Agent to route through, so no `hook/invoked`/`hook/result`
++  // audit pair and no working-directory lookup — the payload `cwd` falls back
++  // to the process cwd). `reason` is always `'other'`: the harness's disposal
++  // path does not record WHY a session ended (clear/logout/prompt_input_exit
++  // are not distinguished from an ordinary teardown), so the taxonomy cannot
++  // be honored yet.
++  ctx.on('session/disposed', (session) => {
++    detached.track(runPoint('SessionEnd', '', sessionEndPayload(session), { signal: detached.signal })
++      .catch((error: unknown) => { ctx.logger.warn(`hooks-claude-code: SessionEnd hook failed: ${String(error)}`) }))
++  })
+ }
+ 
+ /**
+@@ -351,6 +383,18 @@ function postToolPayload(exec: ToolExecution, result: ToolExecutionResult): Reco
+ function stopPayload(agent: Agent): Record<string, unknown> {
+   return { ...base(agent, 'Stop'), stop_hook_active: false }
+ }
++/**
++ * `tool_input` is {@link ApprovalRequest.arguments} — optional because older
++ * askers (composed before that field existed) omit it, in which case the
++ * hook sees `tool_input: undefined`.
++ */
++function permissionRequestPayload(req: ApprovalRequest): Record<string, unknown> {
++  return { ...base(req.agent, 'PermissionRequest'), tool_name: req.toolName, tool_input: req.arguments, tool_use_id: req.callId }
++}
++/** `session.header.id` stays readable after disposal; no Agent/workdir survives it. */
++function sessionEndPayload(session: Session): Record<string, unknown> {
++  return { session_id: session.header.id, transcript_path: '', hook_event_name: 'SessionEnd', reason: 'other' }
++}
+ /**
+  * Build a SubagentStart/SubagentStop payload from the CC base (the child's
+  * `session_id`/`cwd` when the child agent is available) plus the subagent-hook
+diff --git a/packages/experimental/hooks-claude-code/tests/bridge.spec.ts b/packages/experimental/hooks-claude-code/tests/bridge.spec.ts
+index f6b012bc2..c3edbe065 100644
+--- a/packages/experimental/hooks-claude-code/tests/bridge.spec.ts
++++ b/packages/experimental/hooks-claude-code/tests/bridge.spec.ts
+@@ -15,6 +15,7 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+ import { scopeTarget } from '@deepseek-ai/dsh-scope'
+ import SubagentRuntime, { SubagentRunId } from '@deepseek-ai/dsh-subagent'
+ import * as HooksClaude from '@deepseek-ai/dsh-hooks-claude-code'
++import ApprovalService from '@deepseek-ai/dsh-user-approval'
+ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+ 
+ /**
+@@ -71,6 +72,20 @@ function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
+   return agent.whenIdle()
+ }
+ 
++/** {@link harness}, with a real ApprovalService also mounted (PermissionRequest answers it). */
++async function harnessWithApproval(configDir: string, adapter: MockAdapter): Promise<Context> {
++  const ctx = new Context()
++  provideWorkingDirectoryFixture(ctx)
++  await mountAgentLoopTestDependencies(ctx)
++  await ctx.plugin(AgentLoop, { agents: [] })
++  await ctx.plugin(LocalSubprocessRuntime)
++  await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
++  await ctx.plugin(ApprovalService)
++  await ctx.plugin(HooksClaude, { configPath: join(configDir, 'hooks.json') })
++  ctx.llm.registerAdapter(['mock'], adapter)
++  return ctx
++}
++
+ function events(agent: Agent): readonly SessionEvent[] {
+   return agent.session.snapshotEvents()
+ }
+@@ -280,6 +295,122 @@ describe('hooks-claude-code bridge — PostToolUse', () => {
+   })
+ })
+ 
++describe('hooks-claude-code bridge — PermissionRequest', () => {
++  it('a PermissionRequest hook answering allow lets an ask-gated tool run', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const ask = join(dir, 'ask.sh')
++    writeFileSync(ask, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}\'\n')
++    chmodSync(ask, 0o755)
++    const permit = join(dir, 'permit.sh')
++    writeFileSync(permit, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}\'\n')
++    chmodSync(permit, 0o755)
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: {
++      PreToolUse: [{ hooks: [{ type: 'command', command: ask }] }],
++      PermissionRequest: [{ hooks: [{ type: 'command', command: permit }] }],
++    } }))
++
++    const adapter = new MockAdapter([toolCallResponse('c1', 'echo', {}), textResponse('done')])
++    const ctx = await harnessWithApproval(dir, adapter)
++    let ran = false
++    ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { ran = true; return [{ type: 'text', text: 'ok' }] } }))
++    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
++    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
++    await waitForIdle(ctx, agent)
++
++    expect(ran).toBe(true)
++    const result = events(agent).find(e => e.type === 'tool/result')
++    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(false)
++  })
++
++  it('a PermissionRequest hook answering deny rejects an ask-gated tool', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const ask = join(dir, 'ask.sh')
++    writeFileSync(ask, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}\'\n')
++    chmodSync(ask, 0o755)
++    const deny = join(dir, 'deny.sh')
++    writeFileSync(deny, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}\'\n')
++    chmodSync(deny, 0o755)
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: {
++      PreToolUse: [{ hooks: [{ type: 'command', command: ask }] }],
++      PermissionRequest: [{ hooks: [{ type: 'command', command: deny }] }],
++    } }))
++
++    const adapter = new MockAdapter([toolCallResponse('c1', 'echo', {}), textResponse('done')])
++    const ctx = await harnessWithApproval(dir, adapter)
++    let ran = false
++    ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { ran = true; return [{ type: 'text', text: 'ok' }] } }))
++    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
++    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
++    await waitForIdle(ctx, agent)
++
++    expect(ran).toBe(false)
++    const result = events(agent).find(e => e.type === 'tool/result')
++    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
++    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('rejected'))).toBe(true)
++  })
++
++  it('a PermissionRequest hook not deciding delegates to the next answerer', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const ask = join(dir, 'ask.sh')
++    writeFileSync(ask, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}\'\n')
++    chmodSync(ask, 0o755)
++    const silent = join(dir, 'silent.sh')
++    writeFileSync(silent, '#!/usr/bin/env bash\nexit 0\n')
++    chmodSync(silent, 0o755)
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: {
++      PreToolUse: [{ hooks: [{ type: 'command', command: ask }] }],
++      PermissionRequest: [{ hooks: [{ type: 'command', command: silent }] }],
++    } }))
++
++    const adapter = new MockAdapter([toolCallResponse('c1', 'echo', {}), textResponse('done')])
++    const ctx = await harnessWithApproval(dir, adapter)
++    ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { return [{ type: 'text', text: 'ok' }] } }))
++    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
++    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
++    await waitForIdle(ctx, agent)
++
++    // Our hook made no decision (clean exit, no structured output), so it
++    // delegates via `next()`. With no other answerer composed, the waterfall
++    // falls through to the service's fail-closed 'unavailable' — denied, not allowed.
++    const result = events(agent).find(e => e.type === 'tool/result')
++    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
++    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('no approval channel is available'))).toBe(true)
++  })
++
++  it('a PermissionRequest hook receives tool_name, tool_input, and tool_use_id from the pending request', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const ask = join(dir, 'ask.sh')
++    writeFileSync(ask, '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}\'\n')
++    chmodSync(ask, 0o755)
++    const capture = join(dir, 'captured.json')
++    const permit = join(dir, 'permit.sh')
++    writeFileSync(permit, `#!/usr/bin/env bash\ncat > "${capture}.tmp"; mv "${capture}.tmp" "${capture}"\necho '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'\n`)
++    chmodSync(permit, 0o755)
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: {
++      PreToolUse: [{ hooks: [{ type: 'command', command: ask }] }],
++      PermissionRequest: [{ hooks: [{ type: 'command', command: permit }] }],
++    } }))
++
++    const adapter = new MockAdapter([toolCallResponse('c1', 'echo', { greeting: 'hi' }), textResponse('done')])
++    const ctx = await harnessWithApproval(dir, adapter)
++    ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: { greeting: { type: 'string', required: true } }, async execute(args) { return [{ type: 'text', text: args.greeting }] } }))
++    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
++    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
++    await waitForIdle(ctx, agent)
++
++    await waitFor(() => existsSync(capture))
++    const payload = JSON.parse(readFileSync(capture, 'utf8')) as Record<string, unknown>
++    expect(payload['hook_event_name']).toBe('PermissionRequest')
++    expect(payload['tool_name']).toBe('echo')
++    expect(payload['tool_input']).toEqual({ greeting: 'hi' })
++    expect(payload['tool_use_id']).toBe('c1')
++  })
++})
++
+ describe('hooks-claude-code bridge — SessionStart', () => {
+   it('a SessionStart hook injects additionalContext the first request sees', async () => {
+     const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
+@@ -380,6 +511,53 @@ describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)',
+   })
+ })
+ 
++describe('hooks-claude-code bridge — SessionEnd (observe)', () => {
++  it('runs a SessionEnd hook when a session is disposed, reporting its id and reason "other"', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const capture = join(dir, 'captured.json')
++    const hook = join(dir, 'end.sh')
++    writeFileSync(hook, `#!/usr/bin/env bash\ncat > "${capture}.tmp"; mv "${capture}.tmp" "${capture}"\n`)
++    chmodSync(hook, 0o755)
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: hook }] }] } }))
++
++    const ctx = await harness(dir, new MockAdapter([]))
++    const session = ctx.sessions.create(SessionId('ending'))
++    // 'session/disposed' is an observe-only teardown notification — drive it
++    // directly the same way the SubagentStart/Stop tests drive their lifecycle
++    // events, rather than tearing down the whole fiber.
++    ctx.emit('session/disposed', session)
++
++    await waitFor(() => existsSync(capture))
++    const payload = JSON.parse(readFileSync(capture, 'utf8')) as Record<string, unknown>
++    expect(payload['hook_event_name']).toBe('SessionEnd')
++    expect(payload['session_id']).toBe('ending')
++    expect(payload['reason']).toBe('other')
++    expect(payload['transcript_path']).toBe('')
++    await ctx.fiber.dispose()
++  })
++
++  it('a SessionEnd hooks.json entry with a matcher is parsed (matcher ignored) and still runs', async () => {
++    const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
++    dirs.push(dir)
++    const marker = join(dir, 'ran')
++    const hook = join(dir, 'end.sh')
++    writeFileSync(hook, `#!/usr/bin/env bash\ntouch "${marker}"\n`)
++    chmodSync(hook, 0o755)
++    // SessionEnd has no matcher subject (like UserPromptSubmit/Stop); a stray
++    // `matcher` field here must not stop the hook from registering and running.
++    writeFileSync(join(dir, 'hooks.json'), JSON.stringify({ hooks: { SessionEnd: [{ matcher: 'ignored', hooks: [{ type: 'command', command: hook }] }] } }))
++
++    const ctx = await harness(dir, new MockAdapter([]))
++    const session = ctx.sessions.create(SessionId('ending-2'))
++    ctx.emit('session/disposed', session)
++
++    await waitFor(() => existsSync(marker))
++    expect(existsSync(marker)).toBe(true)
++    await ctx.fiber.dispose()
++  })
++})
++
+ describe('hooks-claude-code bridge — load resilience', () => {
+   it('a missing config file registers no hooks and does not crash the loop', async () => {
+     const adapter = new MockAdapter([textResponse('fine')])
+diff --git a/packages/experimental/hooks-claude-code/tests/config.spec.ts b/packages/experimental/hooks-claude-code/tests/config.spec.ts
+index a6f2e7305..d9917dad4 100644
+--- a/packages/experimental/hooks-claude-code/tests/config.spec.ts
++++ b/packages/experimental/hooks-claude-code/tests/config.spec.ts
+@@ -74,11 +74,31 @@ describe('parseClaudeCodeConfig', () => {
+     const { config } = parseClaudeCodeConfig({
+       UserPromptSubmit: [{ matcher: '[', hooks: [{ type: 'command', command: 'prompt.sh' }] }],
+       Stop: [{ matcher: '(', hooks: [{ type: 'command', command: 'stop.sh' }] }],
++      SessionEnd: [{ matcher: '{', hooks: [{ type: 'command', command: 'end.sh' }] }],
+     })
+ 
+     expect(config).toEqual({
+       UserPromptSubmit: [{ hooks: [{ command: 'prompt.sh' }] }],
+       Stop: [{ hooks: [{ command: 'stop.sh' }] }],
++      SessionEnd: [{ hooks: [{ command: 'end.sh' }] }],
++    })
++  })
++
++  it('accepts PermissionRequest with its tool-name matcher subject', () => {
++    const { config } = parseClaudeCodeConfig({
++      PermissionRequest: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'permit.sh' }] }],
++    })
++    expect(config).toEqual({
++      PermissionRequest: [{ matcher: 'Bash', hooks: [{ command: 'permit.sh' }] }],
++    })
++  })
++
++  it('accepts SessionEnd with no matcher subject (match-all)', () => {
++    const { config } = parseClaudeCodeConfig({
++      SessionEnd: [{ hooks: [{ type: 'command', command: 'end.sh' }] }],
++    })
++    expect(config).toEqual({
++      SessionEnd: [{ hooks: [{ command: 'end.sh' }] }],
+     })
+   })
+ 
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index d6df9aae4..bdb0b2cff 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -8800,6 +8800,9 @@ importers:
+       '@deepseek-ai/dsh-tools':
+         specifier: workspace:*
+         version: link:../../core/tools
++      '@deepseek-ai/dsh-user-approval':
++        specifier: workspace:*
++        version: link:../../interaction/user-approval
+       '@deepseek-ai/dsh-working-directory':
+         specifier: workspace:*
+         version: link:../../session/working-directory
+@@ -17843,10 +17846,12 @@ packages:
+ 
+   '@modelcontextprotocol/server-everything@2026.8.31':
+     resolution: {integrity: sha512-5U3OZh8Xq0Li4nA26l6uNvV9/1suMDuWSn+NjLZIhzinhMY6N3A4DCrxVecBGPf2PsNFKTEv5krxGPRwzxc7jQ==}
++    deprecated: 'Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version.'
+     hasBin: true
+ 
+   '@modelcontextprotocol/server-filesystem@2026.8.31':
+     resolution: {integrity: sha512-kKaFkyAh6oipvc9+EAbJ552JafnMnOq5nzmzWkp1jJdBhTAAGpmIpWihUG1+rfNhmEFM98gUZDdCHCDD4v6a7Q==}
++    deprecated: 'Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version.'
+     hasBin: true
+ 
+   '@modelcontextprotocol/server@2.2.0':

@@ -1,0 +1,53 @@
+{
+  "name": "@markishh/dsh-agents-md",
+  "version": "0.1.0",
+  "description": "Load Claude-Code-style agent definition files (.claude/agents/*.md) and register one dsh agent preset per agent.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markishh/mdcode.git",
+    "directory": "packages/dsh-agents-md"
+  },
+  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-agents-md#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./lib/tool-names.js": "./lib/tool-names.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-persona": "0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "~3.18.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@deepseek-ai/dsh-tool-fs": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-tool-fs-search": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-tool-bash": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-tool-todo": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-tool-skill": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-skill-filesystem": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-tool-ask-user": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-compaction-basic": "0.2.1-rc.5",
+    "@deepseek-ai/cordis-plugin-include": "1.0.10",
+    "js-yaml": "4.3.2"
+  }
+}

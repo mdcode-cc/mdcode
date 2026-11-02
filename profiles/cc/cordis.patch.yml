@@ -1,0 +1,624 @@
+# ===========================================================================
+# This patch composes cleanly: `dsh --profile cc --dump-config` exits 0 and
+# real PTY boots reach the TUI, against host dsh 0.2.1-rc.5.
+#
+# RULE: never declare a package the dsh host install already ships (under
+# the global @deepseek-ai/dsh install tree's own node_modules) as a profile
+# DIRECT DEPENDENCY — dsh-app-boot's routeLocalPackage then hands its
+# resolution to plain Node, a second module instance loads, and every
+# Symbol-keyed registry (dsh-scope's kScope) splits, breaking preset
+# registration ("already registered"). Only out-of-tree packages belong in
+# this profile's package.json `dependencies` (dsh-hooks-claude-code, dsh-tui,
+# @markishh/*).
+# ===========================================================================
+#
+# The `cc` profile patch layer. It is applied after the bundles listed in this
+# directory's package.json (`@deepseek-ai/dsh-base`, then
+# `@deepseek-harness-tui/dsh-tui`), the same way every profile under
+# $DSH_HOME/profiles does. Row shapes below follow two verified sources:
+#
+#   - $DSH_HOME/cordis.patch.yml — the host-level home patch: a top-level row
+#     of `{id, config}` patches an existing base row by id; a top-level entry
+#     whose only key is `insert:` appends a list of new rows.
+#   - $DSH_HOME/.agent-presets/liangshen/agent.cordis.yml — group rows
+#     (`name: cordis:group`, `group: true`, `isolate: {...}`, nested `config:`
+#     list) and `disabled:` guards.
+#
+# Every `config` key here is taken from the installed package's README or
+# lib/types at host dsh 0.2.1-rc.5 — see docs/DESIGN.md for the per-key
+# citation.
+#
+# ---------------------------------------------------------------------------
+# 0. Keep the main TUI session off the agent-preset roster, while leaving the
+#    roster (and its register() API) mounted for @markishh/dsh-agents-md.
+# ---------------------------------------------------------------------------
+# ROOT CAUSE:
+#
+# `@deepseek-ai/dsh-system-prompt` (id: system-prompt, mounted UNCONDITIONALLY
+# by dsh-tui's own cordis.patch.yml — no `disabled:` guard at all) claims the
+# GLOBAL prompt section "deployment:persona-prefix" INSIDE ITS OWN CONSTRUCTOR
+# (lib/index.js: `this.section({name: PERSONA_PREFIX_SECTION, ...})` runs
+# every time, independent of the `personaPrefix` config value — there is no
+# way to configure it to skip this). This service cannot be disabled either:
+# `agent-loop`, `tools`, `working-directory` etc. hard-require it (a real boot
+# with `system-prompt` disabled outright fails with "startup failed: 1
+# required plugin did not activate... agent-loop (required) tools,
+# systemPrompt").
+#
+# Once `@deepseek-ai/dsh-agent-preset-registry` resolves as a real dependency
+# (needed below for `cc-agents-md`'s `ctx.agentPresets.register()`), dsh-tui's
+# OWN `registerBundledPresets()` (lib/types/dsh-adapter/bundled-presets.js)
+# activates and EAGERLY registers five preset declarations against that same
+# registry: the four upstream ones (`standard`/`ptc`/`minimal`/`cordis`,
+# sourced from `@deepseek-ai/dsh-web-app`'s `presets/*.patch.yml` — NOT a
+# dependency of this TUI-only profile, resolved only via the dsh Loader's
+# fallback to the globally-installed CLI tree) plus its own bundled
+# `liangshen` preset (`$DSH_HOME/.agent-presets/liangshen/agent.cordis.yml`,
+# confirmed by reading that file). EVERY one of those five declares its own
+# bare, un-isolated `persona` row (`@deepseek-ai/dsh-persona`), which calls
+# `ctx.systemPrompt.section(...)` on the SAME host-level singleton — because
+# none of them sit inside a `cordis:group isolate: {systemPrompt: true}`.
+#
+# The collision is diagnosed LAZILY, only when the TUI actually tries to
+# MOUNT a preset for the main chat agent — `dsh-tui`'s own
+# `presets.js composePreset()` → `presets.mount(agentCtx, resolvedId)` →
+# `@deepseek-ai/dsh-agent-preset-registry`'s `retain()`/`diagnostic()` — which
+# is exactly the stack `~/.dsh/logs/plugins.log` records for every failing
+# boot. The registry's `diagnostic()` for that mount reports BOTH of the
+# preset's own broken rows at once:
+#   - persona (@deepseek-ai/dsh-persona): "deployment:persona-prefix" already
+#     registered — collides with the host's own `system-prompt` row above.
+#   - tool-subagent (@deepseek-ai/dsh-tool-subagent): needs a `modelSelectionSettings`
+#     service SCOPED to the preset's realm; this TUI-only profile only has the
+#     host-plane (unscoped) copy (`dsh-tui-subagent-model-selection-settings`),
+#     because there is no companion `@deepseek-ai/dsh-web-app` bundle to supply
+#     the scoped one the way a "mixed Web+TUI" profile would.
+# Both failures are properties of mounting ANY of the five bundled presets in
+# a bare TUI-only profile with a real registry — reproduced identically with
+# every @markishh row below disabled in turn, because none of those rows
+# ever touch `persona`, `tool-subagent`, or a preset mount at all.
+#
+# `dsh --profile dsh-tui` never hits this: it has no
+# `@deepseek-ai/dsh-agent-preset-registry` dependency, so
+# `declarativePresets(ctx)` is `undefined`, `registerBundledPresets()`
+# short-circuits, and `composePreset()` returns `{}` (no preset, ever) for
+# every session — the preset system never activates there at all. It "boots
+# cleanly" by never touching this code path, not by using it correctly.
+#
+# THE FIX: point the `dsh-tui` row's `preset` at an id NEVER registered by
+# anything (`cc-no-preset`). `composePreset()` wraps ONLY the early
+# `resolveCompatiblePreset()` step in try/catch — an unknown id throws there
+# (`RemoteError agent-preset/not-found`), caught, logged as a warning, and the
+# agent is created on the plain host composition (no crash) — never reaching
+# the unguarded `presets.mount()` call that is the actual fatal site. The
+# registry itself stays mounted throughout, so `cc-agents-md`'s OWN
+# `ctx.agentPresets.register()` calls (16 presets, verified in
+# `$DSH_HOME/logs/plugins.log` on every boot, with or without this fix) are
+# unaffected by this row's choice of preset id.
+#
+# CORRECTION: the 16 `cc-agents-md` presets do NOT "never touch
+# persona/tool-subagent" — every one of them carries its own `persona` row
+# (see section 3's final block, which found the same collision on all 16).
+# The actual root cause was never the `system-prompt` singleton story alone:
+# this profile also declared host-shipped packages (`@deepseek-ai/dsh-base`,
+# `dsh-mcp-client`, `dsh-agent-preset-registry`, `dsh-agent-preset`) as
+# PROFILE DIRECT DEPENDENCIES, which made `dsh-app-boot`'s
+# `routeLocalPackage` load a second module instance and split every
+# Symbol-keyed registry (`dsh-scope`'s `kScope`) across the two copies —
+# producing the exact "already registered" symptom independent of any
+# persona/preset mechanics. Fixed by removing those four packages from
+# package.json (see `scripts/doctor-profile-deps.sh`). The `dsh-tui` row's
+# `preset: cc-no-preset` default below is KEPT regardless: dsh-tui's own
+# bundled presets (`standard`/`ptc`/`minimal`/`cordis`/`liangshen`) are not
+# registered in this composition at all — a real boot with
+# `DSH_TUI_PRESET=standard` did not reach the UI with that preset active;
+# not re-investigated after the dsh-scope fix, so treat as unverified.
+#
+# VERIFIED: two consecutive real `dsh --profile cc` boots reach the TUI's
+# interactive alt-screen (no "dsh-tui startup failed", zero `error` lines in
+# `$DSH_HOME/logs/plugins.log`) with this row in place, versus the exact
+# verbatim persona/tool-subagent failure on every boot without it.
+- id: dsh-tui
+  config:
+    provider: deepseek-official
+    fullscreen: true
+    terminalImages: true
+    effort: max
+    # DSH_TUI_PRESET still wins if a human ever wants a different preset for
+    # a one-off session; the fallback is back to the id nothing registers.
+    # A `cc-main` preset (the same tool surface `@markishh/dsh-agents-md`
+    # gives every `cc-<agent>` preset, minus the persona row) was tried as an
+    # alternative and crashes the boot instead — see the host-level tool
+    # rows in section 3's final block below for why, and for the fix
+    # actually in use.
+    preset: !!js "process.env.DSH_TUI_PRESET || 'cc-no-preset'"
+    workspace: !!js process.env.DSH_TUI_WORKSPACE_TARGET || undefined
+    sessionId: !!js process.env.DSH_TUI_RESUME_SESSION || undefined
+    backend: !!js "process.env.DSH_TUI_BACKEND || undefined"
+
+# ---------------------------------------------------------------------------
+# 1. Model route — DeepSeek only
+# ---------------------------------------------------------------------------
+# The (a) retry fix (`retryPolicy.retryableCodes` adding MALFORMED_RESPONSE and
+# STREAM_CLOSED to the default EMPTY_RESPONSE/RATE_LIMIT/SERVER/TIMEOUT/TRANSPORT
+# set, dsh-llm/lib/types/retry-policy.d.ts:26, dsh-llm-retry/README.md) lives in
+# the HOME-level ~/.dsh/cordis.patch.yml `llm-deepseek` row, not here. The home
+# patch applies AFTER this profile patch and replaces the row by id — it does
+# NOT deep-merge — so a `retryPolicy` written here would be silently discarded
+# the moment the home row applies on top of it in the real mount. See
+# docs/DESIGN.md hardening (a).
+- id: llm-deepseek
+  config:
+    apiKeyEnv: DEEPSEEK_API_KEY
+    baseURL: 'https://api.deepseek.com/anthropic'
+    thinking: enabled
+    reasoningEffort: high
+
+# ---------------------------------------------------------------------------
+# 2. Workspace instructions — the CLAUDE.md chain, first-party
+# ---------------------------------------------------------------------------
+# dsh-base already mounts this with maxBytes 65536. ~/.claude/CLAUDE.md is ~11KB
+# and a project CLAUDE.md adds more, so the budget is raised rather than left to
+# drop the broader file silently (it emits a visible notice, but a dropped global
+# rules file is not a thing to discover from a notice).
+# NOTE: the user-global file this reads is `$DSH_HOME/AGENTS.md`, NOT
+# ~/.claude/CLAUDE.md. Porting the global rules means putting them where this
+# plugin looks — see docs/DESIGN.md asset mapping, row "CLAUDE.md (global)".
+- id: agent-instructions
+  config:
+    maxBytes: 131072
+
+# ---------------------------------------------------------------------------
+# 2b. Skills — customSkillDirs on the `skill-filesystem` row (Phase 2, task 1)
+# ---------------------------------------------------------------------------
+# dsh-base's `skill-filesystem` row is disabled by @deepseek-harness-tui/dsh-tui
+# at the static composition layer (confirmed via `--dump-config`: `disabled:
+# true`, comment "patched by @deepseek-harness-tui/dsh-tui") and re-supplied
+# per-agent-persona at runtime by the liangshen preset
+# ($DSH_HOME/.agent-presets/liangshen/agent.cordis.yml, id: skill-filesystem,
+# bare — no config, no disabled). This patch adds `customSkillDirs` onto the
+# SAME id so it travels if/when that id resolves live; see docs/PHASE2.md for
+# what a real PTY boot actually showed, since --dump-config cannot see what
+# the persona re-mount does at session-start time.
+# Paths (dsh-skill-filesystem README "Roots and priority" — a bundle is a
+# directory's DIRECT children only, nested **/SKILL.md is not discovered):
+#   $HOME/.claude/skills                      — 7 direct SKILL.md bundles
+#   $HOME/.claude/skills/synced/<bucket-uuid>/ — 8 direct SKILL.md bundles
+#     (the one bucket dir that exists today under skills/synced/; a future
+#     sibling bucket needs its own entry here — customSkillDirs has no glob)
+# ABSOLUTE paths, not `~` — empirically confirmed via a `dsh --profile
+# headless --patch <overlay>` real run (see docs/PHASE2.md): a tilde-prefixed
+# customSkillDirs entry silently resolves to nothing (README: "Confirmed
+# missing paths are valid empty state" — no error, just zero skills from that
+# root), while the identical absolute path surfaces all 13 model-invocable
+# skills (2 of the 15 on-disk bundles carry `disable-model-invocation: true`
+# — daily-review, restore-prod-db — correctly excluded from the model-facing
+# catalog, not a bug). Written below as `!!js process.env.HOME + '/...'`
+# rather than a literal path, so this file carries no machine-specific home
+# directory and still resolves to an absolute path at mount time.
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - !!js "process.env.HOME + '/.claude/skills'"
+      - !!js "process.env.HOME + '/.claude/skills/synced/58996b7c-f490-4808-8ff5-11f8e95fc4b4_25f60352-a7e3-408f-b707-315af8084883'"
+
+# ---------------------------------------------------------------------------
+# 2c. Agent preset registry — REMOVED after a real boot proved it conflicts
+# ---------------------------------------------------------------------------
+# `cc-agents-md` below declares `inject = ['agentPresets']` with a register()/
+# resolve() API (dsh-agents-md/index.js). This section used to insert an
+# explicit `agent-preset-registry` + `preset-standard` pair, reasoning that
+# dsh-tui's own conditional `dsh-tui-agent-preset-registry` row (gated on
+# `require.resolve('@deepseek-ai/dsh-agent-preset-registry/package.json')`)
+# would self-disable once that package became a real direct dependency of
+# this profile (see package.json) — i.e. once it resolved — and defer to ours.
+#
+# A real boot disproved that: dsh-tui's own row activates FIRST now that
+# the package resolves, registers the real `agentPresets` service itself,
+# and THEN this section's `agent-preset-registry` row fails to activate:
+#   dsh: warning: 1 entry did not activate
+#   agent-preset-registry (@deepseek-ai/dsh-agent-preset-registry): Error:
+#   service "agentPresets" has been registered at <AgentPresetRegistry>
+# which cascaded into a fatal TUI startup failure ("Agent preset binding
+# requires a scoped context"). dsh-tui's dedup check
+# (`ctx.loader.entries().some(id === 'agent-preset-registry' && !disabled)`)
+# does not see this profile's later-composed row as "already active" in time
+# to defer — the two rows race, not cooperate. Rely on the bundle's own pair
+# (`dsh-tui-agent-preset-registry` + `dsh-tui-agent-presets`); do not
+# reinsert this section unless dsh-tui changes that gating.
+
+# ---------------------------------------------------------------------------
+# 3. The mdcode plugins
+# ---------------------------------------------------------------------------
+# None of the rows below cause or fix the persona/tool-subagent collision
+# described in section 0 — isolation-tested across boots with every row here
+# enabled/disabled in turn, always the same failure independent of this
+# section. The fix lives in section 0 (the `dsh-tui` row's `preset:`
+# override: the host's `system-prompt` row and every bundled preset's own
+# `persona` row unconditionally claim the same global prompt section;
+# pointing the main session at an unregistered preset id sidesteps the mount
+# entirely while `cc-agents-md`'s own roster keeps working) and in this
+# section's final block (host-level tool rows for the main session).
+- insert:
+    # --- (a)+(d): model policy, route logging, protocol retry fallback -----
+    - id: cc-model-tiers
+      name: '@markishh/dsh-model-tiers'
+      disabled: false
+      config:
+        provider: deepseek-official
+        logResolvedRoute: true
+        aliases:
+          haiku:  { model: deepseek-flash,  reasoningEffort: low }
+          sonnet: { model: deepseek-flash,  reasoningEffort: high }
+          opus:   { model: deepseek-flash,  reasoningEffort: max }
+          medium: { model: deepseek-flash,  reasoningEffort: high }
+          # Opt-in review lane only. Not reachable from any `model:` key.
+          review: { model: deepseek-v4-pro, reasoningEffort: max }
+        retry:
+          codes: [MALFORMED_RESPONSE, STREAM_CLOSED]
+          maxAttempts: 2
+
+    # --- the agent roster -> one dsh agent preset per ~/.claude/agents/*.md -
+    # `inheritPlugins` is the tool surface every generated preset mounts under
+    # its dsh-persona row. It is NOT verified-by-loading: the rows are copied
+    # from the shape liangshen/agent.cordis.yml uses, and the realm rule it
+    # states ("a service row here MUST sit inside a group carrying an `isolate`
+    # realm ... dsh-agent-presets rejects that at mount") applies to anything
+    # added here that publishes a service.
+    - id: cc-agents-md
+      name: '@markishh/dsh-agents-md'
+      disabled: false  # unrelated to any @markishh row (see section 3 header above); enabled.
+      config:
+        userDir: '~/.claude/agents'
+        projectDirName: '.claude/agents'
+        watch: true
+        defaultModel: sonnet
+        presetIdPrefix: 'cc-'
+        inheritPlugins:
+          - name: '@deepseek-ai/dsh-tool-fs'
+          - name: '@deepseek-ai/dsh-tool-fs-search'
+            config: { sampleOverCapGlobResults: false }
+          - name: '@deepseek-ai/dsh-tool-bash'
+          - name: '@deepseek-ai/dsh-tool-todo'
+            config: { allowParallelInProgress: true }
+          - name: '@deepseek-ai/dsh-tool-skill'
+          - name: '@deepseek-ai/dsh-skill-filesystem'
+          - name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: compaction
+            name: 'cordis:group'
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config: { thresholdChars: 8192, headChars: 4096, tailChars: 1024 }
+              - name: '@deepseek-ai/dsh-compaction-basic'
+
+    # --- the Task tool + (b) context cap + (c) loop guard -----------------
+    - id: cc-task-tool
+      name: '@markishh/dsh-task-tool'
+      disabled: false
+      config:
+        provider: spawn          # the only provider advertising agentPreset
+        toolName: Task
+        enableRunInBackground: true
+        maxDepth: 2              # orchestrator -> lane owner -> nothing
+        subagentContextCap: 150000
+        contextCapAction: compact  # ctx.compaction.compactIfNeeded(agent, 'pressure', signal); see DESIGN Q3
+        loopGuard:
+          verificationTools: [read, grep, glob, 'bash:*status*', 'bash:ls*', 'bash:*--version*']
+          window: 8
+          maxConsecutive: 6
+          action: remind
+
+    # --- the markdown slash commands --------------------------------------
+    - id: cc-commands-md
+      name: '@markishh/dsh-commands-md'
+      disabled: false
+      config:
+        userCommandDir: '~/.claude/commands'
+        projectCommandDirName: '.claude/commands'
+        includeSkillDirs: true
+        userSkillDir: '~/.claude/skills'
+        watch: true
+        skipNames: [compact, goal, feedback, permission]
+
+    # --- exact-repeat guard, first-party, complementary to (c) ------------
+    # Catches identical repeats; our loop guard catches varying-argument
+    # verification loops. Different shapes, both wanted.
+    - id: cc-repeat-tool-reminder
+      name: '@deepseek-ai/dsh-repeat-tool-reminder'
+      config:
+        thresholds: [3, 5, 8]
+        exclude: [todo_write]
+
+    # --- fallback delegation tool ------------------------------------------
+    # dsh-tool-subagent in 0.2.1-rc.5 exposes `agent_preset` to the model from
+    # `allowedAgentPresets` (dsh-tool-subagent/lib/types/preset-selection.d.ts).
+    # Disabled by default: the preset ids come from the agent files at runtime,
+    # so this list cannot be written here without going stale, and the Task tool
+    # above already covers the roster with per-agent model tiers. Enable it only
+    # to A/B the first-party path against ours during the pilot.
+    - id: cc-tool-subagent-fallback
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: spawn
+        toolName: subagent
+        maxDepth: 2
+
+    # --- host-level tool rows for the main session, not a preset ----------
+    # Section 0 points the `dsh-tui` row's `preset:` at `cc-no-preset` (an id
+    # nothing registers) so the main session never hits the persona/
+    # tool-subagent collision. That sidesteps the crash, but it also means
+    # `composePreset()` never mounts ANYTHING for the main agent — and
+    # dsh-tui's own cordis.patch.yml unconditionally disables dsh-base's
+    # `tool-bash`/`tool-fs`/`tool-fs-search`/`tool-todo`/`tool-skill`/
+    # `skill-filesystem` rows (no guard at all; verified by reading that
+    # file), re-supplying them only inside the five bundled presets. Net
+    # effect, confirmed by a real boot: the main agent has exactly `Task`,
+    # `ask_user_question`, `working_directory` — no shell, no file
+    # read/write/search, no todo list, no skill tool.
+    #
+    # An alternative was tried first and does not work: a `cc-main` preset
+    # (declarative `@deepseek-ai/dsh-agent-preset` row, same
+    # `referenceInheritPlugins` set `@markishh/dsh-agents-md` gives every
+    # `cc-<agent>` preset, minus the persona row) — reasoning it'd dodge the
+    # persona collision by never claiming `deployment:persona-prefix`. Real
+    # boot crash instead (`agent-preset/invalid` — EVERY generic tool row
+    # broken: tool-fs "tool:read", tool-fs-search "tool:glob", tool-bash
+    # "tool:bash", tool-todo "todo_write", tool-skill "skill",
+    # skill-filesystem's "filesystem" provider, tool-ask-user
+    # "ask_user_question" — all "already registered"). Root cause, read from
+    # `@deepseek-ai/dsh-agent-preset-registry/lib/index.js`: `register()`
+    # calls `activate()` which calls `mountPreset()` EAGERLY, the instant a
+    # preset registers (`register()`'s own doc comment: "Register and
+    # eagerly load a definition") — not lazily on first use. `cc-main` has
+    # no persona row, so its OWN tool-fs/tool-bash/etc. rows are the FIRST
+    # thing in its plugin list to actually attempt mounting; every one of
+    # `cc-agents-md`'s 16 generated presets ALSO carries this exact same
+    # tool set, but their activation fails on `persona` FIRST (prepended by
+    # `buildPresetDefinition`, colliding with the host's own `system-prompt`
+    # row — section 0's root cause, confirmed to ALSO afflict every one of
+    # the 16, not just the five bundled presets as section 0 assumed), which
+    # aborts that preset's row-mounting before its OWN tool-fs row ever
+    # attempts to claim anything. `cc-main`, lacking a persona row to fail on
+    # first, was the only preset of the resulting 17 that ever actually
+    # tried to claim `tool:read` etc. — and discovered something else
+    # already holds them (most likely one of the 16, mounted moments earlier
+    # in the same registration burst; the registry does not log which
+    # generation a name's current holder belongs to, so the exact winner
+    # among the 16 is not identifiable from the log). Either way: giving ANY
+    # second preset its own full copy of tool-fs/tool-bash/etc. is a dead
+    # end in this registry version — `ctx.systemPrompt.section()`/`ctx.tools.
+    # register()` do not respect the registry's per-preset `createScope()`
+    # isolation the way an `isolate`-wrapped SERVICE would (compare
+    # `leakedServices()`, which only audits services, lib/index.js ~340).
+    #
+    # WORKING FIX: skip the preset system for the main session entirely —
+    # re-enable the SAME dsh-base tool rows dsh-tui disabled, by id, right
+    # here (this profile's own patch applies last, after dsh-tui's disable).
+    # This is exactly how `ask_user_question` already reaches the main agent
+    # today (dsh-tui mounts its OWN built-in ask-user tool at the host layer,
+    # unconditionally, confirmed absent from `--dump-config` as a
+    # `@deepseek-ai/dsh-tool-ask-user` row anywhere outside a preset's
+    # `plugins:` list) — one claim of each tool name, made once, at the host
+    # layer, never through the registry's eager-activate race at all.
+    # `name:` repeated on every row below (not just `id`/`disabled`): without
+    # it, `prepareProfileEntries`'s profile-compatibility preflight
+    # (`@deepseek-ai/dsh-app-boot/lib/index.js` `manifestOf()`) reads
+    # `row.name.startsWith(...)` on `undefined` and dsh auto-disables all six
+    # rows again ("its declared dsh requirements cannot be validated: Cannot
+    # read properties of undefined (reading 'startsWith')" — confirmed by a
+    # real boot). A plain `disabled:`-only patch (the `dsh-tui` row above, or
+    # `tool-todo`'s HOME-level `allowParallelInProgress` patch) merges fine
+    # without repeating `name` — this preflight path specifically does not,
+    # so it's cheap insurance everywhere in this list.
+    - id: tool-bash
+      name: '@deepseek-ai/dsh-tool-bash'
+      disabled: false
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+      disabled: false
+    - id: tool-fs-search
+      name: '@deepseek-ai/dsh-tool-fs-search'
+      disabled: false
+      config: { sampleOverCapGlobResults: false }
+    - id: tool-todo
+      name: '@deepseek-ai/dsh-tool-todo'
+      disabled: false
+      config: { allowParallelInProgress: true }
+    - id: tool-skill
+      name: '@deepseek-ai/dsh-tool-skill'
+      disabled: false
+    - id: skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      disabled: false
+
+# ---------------------------------------------------------------------------
+# 4. Claude Code hooks bridge
+# ---------------------------------------------------------------------------
+# @deepseek-ai/dsh-hooks-claude-code 0.2.1-rc.5 is installed as a direct
+# dependency of THIS profile (package.json already lists it), not vendored
+# under the global dsh install tree — pinned in pnpm-lock.yaml. No
+# `dsh plugin add` needed.
+#
+# configPath points at the real settings.json; its `hooks` key is what the
+# bridge reads (README "Path to a hooks.json or a settings file whose
+# `hooks` key holds the config"). Per that same README only SessionStart,
+# UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart/Stop fire.
+# A settings.json with a SessionStart hook, an approval-relay PermissionRequest
+# hook, a SessionEnd hook, and a UserPromptSubmit hook means PermissionRequest
+# and SessionEnd are silently NOT run by this bridge (no supported-event
+# equivalent at all in 0.2.1-rc.5); SessionStart and UserPromptSubmit are. See
+# docs/PHASE2.md for the real-boot verification of UserPromptSubmit firing.
+# NOTE: this id does not exist in the base/tui composition, so it must go
+# under `insert:` (a bare top-level {id, config} row PATCHES an existing row
+# by id and is silently dropped with a stderr warning — "patch: entry ... not
+# found" — if the id isn't already there; verified by a real
+# `--dump-config` run, see docs/PHASE2.md).
+# ABSOLUTE path, not `~` — defensive, not independently proven for THIS
+# package (testing it needed either a live PTY boot of `cc`, blocked by this
+# host's missing controlling terminal, or installing the package into the
+# `headless` profile, out of this task's file scope). The sibling
+# `skill-filesystem` row above DOES silently drop a tilde path (see its
+# comment) on the same host/package generation, and `grep -rn "homedir"`
+# over this package's lib/index.js finds no home-dir expansion code either,
+# so the same failure mode is plausible here too — cheap to avoid, costly to
+# discover as a silently-ignored hook config. Written as
+# `!!js process.env.HOME + '/...'` so the value is absolute without
+# hardcoding a machine-specific home directory.
+- insert:
+    - id: hooks-claude-code
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: !!js "process.env.HOME + '/.claude/settings.json'"
+
+# ---------------------------------------------------------------------------
+# 5. MCP servers not already at home level
+# ---------------------------------------------------------------------------
+# Generated by `node scripts/gen-mcp-rows.mjs` from ~/.claude.json
+# `mcpServers`, then pasted in by hand (see that script for the exact
+# transform). Skipped: servers already mounted at $DSH_HOME/cordis.patch.yml
+# in the same shape (no duplicate/fight), and grid/tabularis (known broken —
+# grid's localhost:7001 bridge isn't running, tabularis.app isn't installed
+# at the path its stdio command names).
+# `failOnStartupError: false` everywhere so one dead server doesn't block the
+# whole profile from mounting (app-boot's own startup policy already permits
+# this per the dsh-mcp-client README). `toolCallTimeoutMs` kept at the
+# package default (60000) — none of these six are the slow/long-poll kind the
+# home patch's 120000-180000 overrides exist for.
+# NOTE: same `insert:` requirement as the hooks row above — none of these six
+# ids exist in the base/tui composition.
+#
+# CREDENTIALS: no literal secret values below — every `env`/`headers` value
+# that used to be one is now a `!!js process.env.<NAME>` reference
+# (cordis-plugin-include's entry-list YAML dialect: an explicit `!!js` scalar
+# is handed to `new Function("ctx","expr","with(ctx){return eval(expr)}")` at
+# entry activation — see that package's lib/index.js — so it reads the real
+# process environment at mount time, not a literal in this file). This repo
+# is a public mirror; a literal key here was a leaked-credential bug (see
+# docs/PHASE2.md), not a format choice — never put a literal secret in this
+# file again.
+#
+# Required env vars for this profile to mount `gemini` and `stitch` with real
+# credentials (unset = that one row's `failOnStartupError: false` just no-ops
+# it, nothing else breaks):
+#   GEMINI_API_KEY   - gemini row, env.GEMINI_API_KEY
+#   STITCH_API_KEY   - stitch row, headers['X-Goog-Api-Key']
+#
+# A real install supplies both through $DSH_HOME/.env (loaded and
+# materialized into process.env by dsh-app-boot's loadLayeredEnv before any
+# config entry mounts — see that package's lib/index.js). Any other install
+# can export them in the shell that launches `dsh`, or in a project-level
+# `.env` in the invoking directory.
+- insert:
+    - id: mcp-gemini
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: gemini
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - '@rlabs-inc/gemini-mcp'
+        env:
+          GEMINI_API_KEY: !!js process.env.GEMINI_API_KEY
+          GEMINI_MODEL: gemini-2.5-pro
+          GEMINI_PRO_MODEL: gemini-2.5-pro
+          GEMINI_FLASH_MODEL: gemini-2.5-flash
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+    - id: mcp-codex
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: codex
+        transport: stdio
+        command: codex
+        args:
+          - mcp-server
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+    - id: mcp-browsermcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: browsermcp
+        transport: stdio
+        command: npx
+        args:
+          - '@browsermcp/mcp@latest'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+    - id: mcp-chrome-devtools
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: chrome-devtools
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - 'chrome-devtools-mcp@latest'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+    - id: mcp-stitch
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: stitch
+        transport: streamable-http
+        url: https://stitch.googleapis.com/mcp
+        headers:
+          X-Goog-Api-Key: !!js process.env.STITCH_API_KEY
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+    - id: mcp-dbx
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: dbx
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - '@dbx-app/mcp-server'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+
+# ---------------------------------------------------------------------------
+# 6. Plugin logging — appends every ctx.logger message to a file
+# ---------------------------------------------------------------------------
+# @markishh/dsh-plugin-log — real (non-stub) cordis logger exporter, proven
+# on a real `dsh --profile headless` boot. No `names` filter: a filter would
+# exclude `@deepseek-ai/dsh-agent-preset-registry`'s own warn()s (fiber name
+# "agent-preset-registry", no "dsh-" prefix — the plugin has no `export const
+# name`, so cordis derives it from `hyphenate(AgentPresetRegistry.name)`),
+# and a hardcoded allowlist of every non-"dsh-"-prefixed logger name this
+# profile cares about would drift. level: info admits warn too.
+- insert:
+    - id: cc-plugin-log
+      name: '@markishh/dsh-plugin-log'
+      config:
+        path: '$DSH_HOME/logs/plugins.log'
+        level: info
+
+# ---------------------------------------------------------------------------
+# 7. PermissionRequest/SessionEnd relay — the two events section 4's
+#    `hooks-claude-code` row does not bridge (see its comment above).
+# ---------------------------------------------------------------------------
+# @markishh/dsh-hooks-approval — reads the SAME settings.json as the
+# `hooks-claude-code` row above and runs its configured `PermissionRequest`
+# (a blocking approval-relay PermissionRequest hook) and `SessionEnd`
+# commands, the only two of the four hooks.json entries that row silently
+# drops. `fallback: 'next'` (default) so an unconfigured or failed
+# PermissionRequest hook still falls through to the TUI prompt instead of
+# denying by default. `timeoutMs: 120000` (2 min, not the 10 min package
+# default): an approval-relay hook that blocks indefinitely polling its
+# parent pid, with no ceiling of its own, needs something else to bound an
+# unanswered ask — set low enough that a human stuck without the relay
+# running still gets bounced to the TUI prompt (via `fallback: 'next'`) in a
+# couple of minutes instead of ten.
+- insert:
+    - id: cc-hooks-approval
+      name: '@markishh/dsh-hooks-approval'
+      config:
+        configPath: !!js "process.env.HOME + '/.claude/settings.json'"
+        timeoutMs: 120000

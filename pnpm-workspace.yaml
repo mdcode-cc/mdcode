@@ -1,0 +1,15 @@
+packages:
+  - 'packages/*'
+
+# profiles/cc is deliberately NOT a workspace package here. Its real
+# dependencies (@deepseek-harness-tui/dsh-tui + the native builds it drags
+# in: node-pty, koffi, @deepseek-ai/dsh-subprocess-local, @google/genai,
+# protobufjs) are installed and mounted independently under
+# ~/.dsh/profiles/cc, which carries its own pnpm-lock.yaml/node_modules. The
+# packages/* workspace only needs @deepseek-ai/* as peerDependencies
+# (supplied by whichever host loads the plugin), so it never needs to
+# resolve dsh-tui or build anything native. Pulling profiles/* into this
+# workspace was the actual cause of ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION
+# (dsh-tui@0.18.0, published 2026-11-01) and ERR_PNPM_IGNORED_BUILDS here —
+# dropping it fixes both without touching policy.
+minimumReleaseAge: 0

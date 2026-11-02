@@ -1,0 +1,129 @@
+diff --git a/packages/core/tools/src/index.ts b/packages/core/tools/src/index.ts
+index ca939d4df..e64382d66 100644
+--- a/packages/core/tools/src/index.ts
++++ b/packages/core/tools/src/index.ts
+@@ -1753,6 +1753,7 @@ export class ToolRuntime extends Service {
+       agent: exec.agent,
+       toolName: exec.name,
+       callId: exec.callId,
++      arguments: exec.arguments,
+       ...ask.reason !== undefined ? { reason: ask.reason } : {},
+       ...ask.displayReason !== undefined ? { displayReason: ask.displayReason } : {},
+       signal: exec.signal,
+diff --git a/packages/core/tools/tests/tools.spec.ts b/packages/core/tools/tests/tools.spec.ts
+index 870c72fe4..f00fbba25 100644
+--- a/packages/core/tools/tests/tools.spec.ts
++++ b/packages/core/tools/tests/tools.spec.ts
+@@ -839,6 +839,10 @@ describe('ToolRuntime', () => {
+       expect(seen[0]).toMatchObject({
+         agent, toolName: 'echo', callId: 'c1', reason: 'hook wants a human', displayReason: { en: 'Allow it?', zh: '允许吗？' },
+       })
++      // serviceAsk forwards the call's own parsed arguments so an approval UI
++      // (or a Claude Code PermissionRequest hook relayed through the bridge)
++      // can show what it would actually run, not just the tool's name.
++      expect(seen[0]?.arguments).toEqual({ text: 'hi' })
+       expect(seen[0]?.signal).toBe(controller.signal)
+     })
+ 
+diff --git a/packages/interaction/user-approval/README.md b/packages/interaction/user-approval/README.md
+index 8c52fa090..6c92de1dc 100644
+--- a/packages/interaction/user-approval/README.md
++++ b/packages/interaction/user-approval/README.md
+@@ -152,7 +152,7 @@ These limits define when the seam is a poor fit or needs special composition car
+ 
+ - **Requests are valid only inside an open turn** — an idle or between-turn caller throws before auditing; a durable out-of-turn approval workflow is deferred.
+ - **Only one-shot grants exist** — the outcome vocabulary has `allowed-once` but no `allow-always`, remembered rule, revocation, or grant store; session policy is only `ask` / `never`.
+-- **The request carries no tool arguments** — an answerer sees the tool name, reason, and optional call id; the ACP machine channel requires a call id and delegates requests without one.
++- **Tool arguments are opt-in and asker-supplied** — `arguments` is optional on the request; an answerer sees it only when the asker attached it (`dsh-tools`' `serviceAsk` does, passing the call's parsed input), and an asker that omits it (or one written before this field existed) still gets a request with `arguments: undefined`. The seam does not validate the shape itself. The ACP machine channel requires a call id and delegates requests without one.
+ - **No built-in answerer** — headless or incompletely composed deployments resolve `unavailable` and fail closed; the service itself never prompts a human.
+ 
+ <a id="dev-note"></a>
+diff --git a/packages/interaction/user-approval/README.zh.md b/packages/interaction/user-approval/README.zh.md
+index 66d30dfd4..e0bcccf01 100644
+--- a/packages/interaction/user-approval/README.zh.md
++++ b/packages/interaction/user-approval/README.zh.md
+@@ -152,7 +152,7 @@ Approval prompts are disabled in this session: actions that require approval are
+ 
+ - **请求只在尚未结束的轮次内有效**：在空闲时或轮次之间发起调用，会在审计前抛出异常；持久化的轮次外审批工作流仍属延期工作。
+ - **仅存在一次性授权**：结果词汇包含 `allowed-once`，但不含 `allow-always`、已记住的规则、撤销或授权存储；会话策略只有 `ask`／`never`。
+-- **请求不携带工具参数**：应答者会看到工具名称、原因和可选调用 id；ACP（Agent Client Protocol）机器通道要求调用 id，并会委托不含 id 的请求。
++- **工具参数是可选的、由提问方提供**：请求上的 `arguments` 是可选字段；只有当提问方附带了它时应答者才会看到（`dsh-tools` 的 `serviceAsk` 会这样做，传递该调用已解析的输入），省略它的提问方（或在该字段出现之前写成的提问方）仍会得到一个 `arguments: undefined` 的请求。该 seam 本身不校验其形状。ACP（Agent Client Protocol）机器通道要求调用 id，并会委托不含 id 的请求。
+ - **没有内置应答者**：无头或组合不完整的部署会返回 `unavailable` 并以拒绝方式关闭；服务自身绝不会提示人类。
+ 
+ <a id="dev-note"></a>
+diff --git a/packages/interaction/user-approval/src/index.ts b/packages/interaction/user-approval/src/index.ts
+index 9a14f04d0..6a7ea3c5d 100644
+--- a/packages/interaction/user-approval/src/index.ts
++++ b/packages/interaction/user-approval/src/index.ts
+@@ -106,7 +106,8 @@ export function setApprovalPolicy(session: Session, policy: ApprovalPolicy): voi
+ 
+ /**
+  * Readonly same-process permission question. `callId` links to an already
+- * presented tool call, so arguments are not duplicated here.
++ * presented tool call; `arguments` (optional, from {@link ApprovalRequestEvent})
++ * carries that call's input when the asker has it to hand.
+  */
+ export interface ApprovalRequest extends ApprovalRequestEvent {
+   /**
+diff --git a/packages/interaction/user-approval/src/types.ts b/packages/interaction/user-approval/src/types.ts
+index 12b8106d3..d0a292ca8 100644
+--- a/packages/interaction/user-approval/src/types.ts
++++ b/packages/interaction/user-approval/src/types.ts
+@@ -71,6 +71,15 @@ export interface ApprovalRequestEvent {
+   readonly reason?: string
+   /** Localized presentation only; never persisted in approval audit events. */
+   readonly displayReason?: { readonly en: string; readonly [locale: string]: string }
++  /**
++   * The tool call's input, when the asker has it to hand (e.g. dsh-tools'
++   * `serviceAsk` passes the call's parsed arguments). `unknown` because the
++   * seam does not validate a tool's own argument shape; optional because an
++   * asker without a materialized call (or one written before this field
++   * existed) omits it — existing answerers that never read it are unaffected.
++   * Never persisted in approval audit events (same as `displayReason`).
++   */
++  readonly arguments?: unknown
+   /** Cancellation lifetime of the pending request. */
+   readonly signal?: AbortSignal
+ }
+diff --git a/packages/interaction/user-approval/tests/approval.spec.ts b/packages/interaction/user-approval/tests/approval.spec.ts
+index 0ec3b9580..822968b3d 100644
+--- a/packages/interaction/user-approval/tests/approval.spec.ts
++++ b/packages/interaction/user-approval/tests/approval.spec.ts
+@@ -117,6 +117,37 @@ describe('ApprovalService.request', () => {
+     await scopeFiber.dispose()
+   })
+ 
++  it('passes optional `arguments` through to the answerer untouched, and never audits it', async () => {
++    const ctx = await mounted()
++    const { agent, appended } = fakeAgent()
++    let received: ApprovalRequest | undefined
++    ctx.on('approval/request', (req) => {
++      received = req
++      return Promise.resolve<ApprovalOutcome>('allowed-once')
++    })
++    const toolArguments = { path: '/etc/passwd', recursive: true }
++
++    await expect(ctx.approval.request(requestOf(agent, { arguments: toolArguments }))).resolves.toBe('allowed-once')
++
++    expect(received?.arguments).toBe(toolArguments)
++    expect(Object.keys(appended[0]?.data ?? {})).not.toContain('arguments')
++  })
++
++  it('omits `arguments` from both the request an answerer sees and the audit log when the asker never set it', async () => {
++    const ctx = await mounted()
++    const { agent } = fakeAgent()
++    let received: ApprovalRequest | undefined
++    ctx.on('approval/request', (req) => {
++      received = req
++      return Promise.resolve<ApprovalOutcome>('allowed-once')
++    })
++
++    await ctx.approval.request(requestOf(agent))
++
++    expect(received?.arguments).toBeUndefined()
++    expect('arguments' in (received ?? {})).toBe(false)
++  })
++
+   it('contains an approval/asked observer throw after append and still completes the pair', async () => {
+     const ctx = new Context()
+     await ctx.plugin(SessionStore)

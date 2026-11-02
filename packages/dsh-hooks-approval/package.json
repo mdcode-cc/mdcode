@@ -1,0 +1,41 @@
+{
+  "name": "@markishh/dsh-hooks-approval",
+  "version": "0.1.0",
+  "description": "Run the PermissionRequest (blocking approval relay) and SessionEnd command hooks from a Claude Code settings.json \u2014 the two hook events @deepseek-ai/dsh-hooks-claude-code does not bridge.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markishh/mdcode.git",
+    "directory": "packages/dsh-hooks-approval"
+  },
+  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-hooks-approval#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-hook-protocol": "0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "~3.18.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-hook-protocol": "0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "3.18.5"
+  }
+}

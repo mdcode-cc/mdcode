@@ -1,0 +1,38 @@
+{
+  "name": "@markishh/dsh-model-tiers",
+  "version": "0.1.0",
+  "description": "Resolve Claude-Code model tier names (haiku/sonnet/opus) to DeepSeek routes, log the resolved route per request, and retry protocol-level model failures.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markishh/mdcode.git",
+    "directory": "packages/dsh-model-tiers"
+  },
+  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-model-tiers#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "~3.18.4"
+  }
+}

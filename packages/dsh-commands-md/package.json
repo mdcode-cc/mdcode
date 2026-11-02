@@ -1,0 +1,38 @@
+{
+  "name": "@markishh/dsh-commands-md",
+  "version": "0.1.0",
+  "description": "Register Claude-Code-style markdown slash commands (.claude/commands/*.md) as dsh commands, with $ARGUMENTS substitution.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markishh/mdcode.git",
+    "directory": "packages/dsh-commands-md"
+  },
+  "homepage": "https://github.com/markishh/mdcode/tree/main/packages/dsh-commands-md#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+    "@deepseek-ai/schemastery": "~3.18.4"
+  }
+}
