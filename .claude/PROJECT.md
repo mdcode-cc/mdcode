@@ -133,7 +133,7 @@ plus `blocked` and `dropped`. Only the orchestrator flips a status line.
 | publishing to npm | `npm publish` / `pnpm publish`; any `"private": false` added to a `packages/*/package.json`; any change to a `publishConfig` block |
 | any edits under the `dsh` home (the host's own config/profile directory) | any write outside this repo's own tree that touches the host's `cordis.patch.yml`, profile directories, or global rules file |
 | any write into another repo | this repo documents design decisions about other local projects only by reference, never by writing into them |
-| a git commit | the owner commits; agents do not |
+| a git commit | the maintainer commits; agents do not |
 | adding a non-DeepSeek model provider | any new LLM provider row that is not DeepSeek, or a `baseURL` off the DeepSeek API |
 
 Detect-all: `git status --porcelain` must show nothing outside this repo, and
