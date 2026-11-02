@@ -119,7 +119,7 @@ function shQuote(v) {
 // the direct child dsh-mcp-client supervises and signals on shutdown.
 function buildStdioExecScript(serverName, command, args) {
   const real = [command, ...(args || [])].map(shQuote).join(' ');
-  const logDir = '${DSH_HOME:-$HOME/.dsh}/logs';
+  const logDir = '$MDCODE_LOG_DIR';
   const logFile = `${logDir}/mcp-${serverName}.log`;
   return `mkdir -p "${logDir}" && exec ${real} 2>>"${logFile}"`;
 }
@@ -174,7 +174,7 @@ for (const [name, server] of Object.entries(servers)) {
     lines.push(`    command: /bin/sh`);
     lines.push(`    args:`);
     lines.push(emitList(['-c', buildStdioExecScript(name, server.command, server.args)], 6));
-    // DSH_HOME always comes first: dsh-mcp-client's child-env scrub drops
+    // MDCODE_LOG_DIR is computed at config time so it is always a string even when DSH_HOME is unset; dsh-mcp-client's child-env scrub drops
     // ambient DSH_* names before configured `env` merges on top, so the
     // `${DSH_HOME:-...}` fallback in the script above needs this re-added
     // explicitly or it silently uses the wrong log directory.

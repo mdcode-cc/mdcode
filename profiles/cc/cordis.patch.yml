@@ -561,9 +561,9 @@
         command: /bin/sh
         args:
           - '-c'
-          - 'mkdir -p "${DSH_HOME:-$HOME/.dsh}/logs" && exec npx @browsermcp/mcp@latest 2>>"${DSH_HOME:-$HOME/.dsh}/logs/mcp-browsermcp.log"'
+          - 'mkdir -p "$MDCODE_LOG_DIR" && exec npx @browsermcp/mcp@latest 2>>"$MDCODE_LOG_DIR/mcp-browsermcp.log"'
         env:
-          DSH_HOME: !!js process.env.DSH_HOME
+          MDCODE_LOG_DIR: !!js "(process.env.DSH_HOME || process.env.HOME + '/.dsh') + '/logs'"
         toolCallTimeoutMs: 60000
         failOnStartupError: false
     - id: mcp-chrome-devtools
@@ -574,9 +574,9 @@
         command: /bin/sh
         args:
           - '-c'
-          - 'mkdir -p "${DSH_HOME:-$HOME/.dsh}/logs" && exec npx -y chrome-devtools-mcp@latest --no-usage-statistics 2>>"${DSH_HOME:-$HOME/.dsh}/logs/mcp-chrome-devtools.log"'
+          - 'mkdir -p "$MDCODE_LOG_DIR" && exec npx -y chrome-devtools-mcp@latest --no-usage-statistics 2>>"$MDCODE_LOG_DIR/mcp-chrome-devtools.log"'
         env:
-          DSH_HOME: !!js process.env.DSH_HOME
+          MDCODE_LOG_DIR: !!js "(process.env.DSH_HOME || process.env.HOME + '/.dsh') + '/logs'"
         toolCallTimeoutMs: 60000
         failOnStartupError: false
     - id: mcp-stitch
