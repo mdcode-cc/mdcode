@@ -57,6 +57,15 @@ importers:
         specifier: 4.3.2
         version: 4.3.2
 
+  packages/dsh-changes-panel:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ~4.0.4
+        version: 4.0.5(@deepseek-ai/cordis-plugin-include@1.0.10)(@deepseek-ai/cordis-plugin-loader@1.0.6)
+      '@deepseek-ai/schemastery':
+        specifier: ~3.18.4
+        version: 3.18.5
+
   packages/dsh-commands-md:
     dependencies:
       '@deepseek-ai/cordis':

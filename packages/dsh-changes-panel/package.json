@@ -1,0 +1,36 @@
+{
+  "name": "@mdcode-cc/dsh-changes-panel",
+  "version": "0.1.1",
+  "description": "A dsh-TUI side panel showing the session cwd's git working tree: staged/unstaged/untracked files with per-file +/- line counts.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdcode-cc/mdcode.git",
+    "directory": "packages/dsh-changes-panel"
+  },
+  "homepage": "https://github.com/mdcode-cc/mdcode/tree/main/packages/dsh-changes-panel#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/schemastery": "~3.18.4"
+  }
+}
