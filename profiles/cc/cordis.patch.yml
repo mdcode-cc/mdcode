@@ -484,13 +484,53 @@
 # in the same shape (no duplicate/fight), and grid/tabularis (known broken —
 # grid's localhost:7001 bridge isn't running, tabularis.app isn't installed
 # at the path its stdio command names).
+#
+# Removed entirely (not generated, not patched back in — `--skip
+# gemini,codex,dbx` on the generator script): gemini — not a DeepSeek model,
+# out of scope for this profile; codex — `codex mcp-server` is deprecated
+# upstream; dbx — broken, its stdio child prints `Error:
+# DATA_MIGRATION_REQUIRED: open DBX Desktop or Web to complete the data
+# security upgrade` and exits instead of serving. All three were also
+# printing straight to the terminal, ahead of or over the TUI, which is the
+# bug the stderr redirect below fixes for the servers that remain — known
+# upstream issue: stdio MCP child stderr is inherited by the host process
+# (deepseek-harness discussions #7182, #11622).
+#
 # `failOnStartupError: false` everywhere so one dead server doesn't block the
 # whole profile from mounting (app-boot's own startup policy already permits
 # this per the dsh-mcp-client README). `toolCallTimeoutMs` kept at the
-# package default (60000) — none of these six are the slow/long-poll kind the
-# home patch's 120000-180000 overrides exist for.
-# NOTE: same `insert:` requirement as the hooks row above — none of these six
-# ids exist in the base/tui composition.
+# package default (60000) — none of these three are the slow/long-poll kind
+# the home patch's 120000-180000 overrides exist for.
+# NOTE: same `insert:` requirement as the hooks row above — none of these
+# three ids exist in the base/tui composition.
+#
+# STDERR REDIRECT (stdio only): dsh-mcp-client spawns the stdio `command`
+# directly and the child's stderr fd is inherited from the harness process —
+# not configurable from this package's `config` (README "Use this package" /
+# "Understand the implementation": the SDK owns the actual spawn, the
+# package only shares its env-scrub definition) — so a chatty child
+# (a deprecation banner, a usage-statistics notice, a daemon "connected"
+# line) prints straight over the TUI instead of staying in a log. Fix
+# applied per row below: `command`/`args` run the real command through
+# `/bin/sh -c 'mkdir -p ... && exec <real command> ... 2>>"<logfile>"'`
+# instead of invoking it directly.
+#   - `exec` replaces the shell's own process image, so the pid
+#     dsh-mcp-client's supervisor tracks and signals on shutdown is the real
+#     command's pid, not an extra `sh` layer sitting above it.
+#   - `mkdir -p` does not rely on cc-plugin-log (section 6 below) having
+#     created `$DSH_HOME/logs` first — insert-list activation order across
+#     rows is not a documented guarantee, so each row makes its own log
+#     directory.
+#   - `DSH_HOME` is re-added via this row's own `env` because
+#     dsh-mcp-client's child-env scrub drops ambient `DSH_*` names before the
+#     configured `env` merges on top (same README section); without this,
+#     `${DSH_HOME:-$HOME/.dsh}` inside the `-c` script would always take the
+#     `$HOME/.dsh` fallback, silently wrong on an install where `DSH_HOME`
+#     differs from that default. `HOME` itself is not scrubbed (it matches
+#     neither `/KEY|PASSWORD|SECRET|TOKEN/i` nor `DSH_*`), so the fallback
+#     needs no extra `env` entry of its own.
+#   - `chrome-devtools` additionally gets `--no-usage-statistics` so its own
+#     opt-out banner stops firing at the source, independent of the redirect.
 #
 # CREDENTIALS: no literal secret values below — every `env`/`headers` value
 # that used to be one is now a `!!js process.env.<NAME>` reference
@@ -502,52 +542,28 @@
 # docs/PHASE2.md), not a format choice — never put a literal secret in this
 # file again.
 #
-# Required env vars for this profile to mount `gemini` and `stitch` with real
-# credentials (unset = that one row's `failOnStartupError: false` just no-ops
+# Required env vars for this profile to mount `stitch` with real
+# credentials (unset = that row's `failOnStartupError: false` just no-ops
 # it, nothing else breaks):
-#   GEMINI_API_KEY   - gemini row, env.GEMINI_API_KEY
 #   STITCH_API_KEY   - stitch row, headers['X-Goog-Api-Key']
 #
-# A real install supplies both through $DSH_HOME/.env (loaded and
+# A real install supplies it through $DSH_HOME/.env (loaded and
 # materialized into process.env by dsh-app-boot's loadLayeredEnv before any
 # config entry mounts — see that package's lib/index.js). Any other install
-# can export them in the shell that launches `dsh`, or in a project-level
+# can export it in the shell that launches `dsh`, or in a project-level
 # `.env` in the invoking directory.
 - insert:
-    - id: mcp-gemini
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: gemini
-        transport: stdio
-        command: npx
-        args:
-          - -y
-          - '@rlabs-inc/gemini-mcp'
-        env:
-          GEMINI_API_KEY: !!js process.env.GEMINI_API_KEY
-          GEMINI_MODEL: gemini-2.5-pro
-          GEMINI_PRO_MODEL: gemini-2.5-pro
-          GEMINI_FLASH_MODEL: gemini-2.5-flash
-        toolCallTimeoutMs: 60000
-        failOnStartupError: false
-    - id: mcp-codex
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: codex
-        transport: stdio
-        command: codex
-        args:
-          - mcp-server
-        toolCallTimeoutMs: 60000
-        failOnStartupError: false
     - id: mcp-browsermcp
       name: '@deepseek-ai/dsh-mcp-client'
       config:
         serverName: browsermcp
         transport: stdio
-        command: npx
+        command: /bin/sh
         args:
-          - '@browsermcp/mcp@latest'
+          - '-c'
+          - 'mkdir -p "${DSH_HOME:-$HOME/.dsh}/logs" && exec npx @browsermcp/mcp@latest 2>>"${DSH_HOME:-$HOME/.dsh}/logs/mcp-browsermcp.log"'
+        env:
+          DSH_HOME: !!js process.env.DSH_HOME
         toolCallTimeoutMs: 60000
         failOnStartupError: false
     - id: mcp-chrome-devtools
@@ -555,10 +571,12 @@
       config:
         serverName: chrome-devtools
         transport: stdio
-        command: npx
+        command: /bin/sh
         args:
-          - -y
-          - 'chrome-devtools-mcp@latest'
+          - '-c'
+          - 'mkdir -p "${DSH_HOME:-$HOME/.dsh}/logs" && exec npx -y chrome-devtools-mcp@latest --no-usage-statistics 2>>"${DSH_HOME:-$HOME/.dsh}/logs/mcp-chrome-devtools.log"'
+        env:
+          DSH_HOME: !!js process.env.DSH_HOME
         toolCallTimeoutMs: 60000
         failOnStartupError: false
     - id: mcp-stitch
@@ -569,17 +587,6 @@
         url: https://stitch.googleapis.com/mcp
         headers:
           X-Goog-Api-Key: !!js process.env.STITCH_API_KEY
-        toolCallTimeoutMs: 60000
-        failOnStartupError: false
-    - id: mcp-dbx
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: dbx
-        transport: stdio
-        command: npx
-        args:
-          - -y
-          - '@dbx-app/mcp-server'
         toolCallTimeoutMs: 60000
         failOnStartupError: false
 

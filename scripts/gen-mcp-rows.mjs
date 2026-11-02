@@ -7,7 +7,21 @@
 // script carries no hardcoded list of personal service names — and
 // known-broken servers (grid/tabularis: grid's localhost bridge isn't
 // running, tabularis.app isn't installed at the path its stdio command
-// names).
+// names). Pass `--skip name,name` to drop additional servers by name (e.g.
+// a deprecated or noisy one not worth mounting at all) without editing this
+// file.
+//
+// STDERR REDIRECT: every stdio row's `command`/`args` run the real command
+// through `/bin/sh -c 'mkdir -p ... && exec <real command> ... 2>>"<log>"'`
+// instead of invoking it directly, so a chatty child's stderr (deprecation
+// banners, usage-statistics notices, "connected" lines) lands in
+// `$DSH_HOME/logs/mcp-<serverName>.log` instead of printing over the host
+// TUI — dsh-mcp-client inherits the child's stderr fd as-is and exposes no
+// config knob for it (see profiles/cc/cordis.patch.yml section 5 for the
+// full mechanism note). `exec` keeps the real command's pid as the direct
+// child so shutdown still signals it, not an extra `sh` layer. `DSH_HOME` is
+// re-added via the row's own `env` because dsh-mcp-client's child-env scrub
+// drops ambient `DSH_*` names before configured `env` merges on top.
 //
 // SECURITY: this script never emits a literal `env` or `headers` value — only
 // `!!js process.env.<NAME>` references (see profiles/cc/cordis.patch.yml for
@@ -16,13 +30,23 @@
 // leaked-credential bug this script now refuses to repeat. The env var names
 // a generated profile needs are printed to stderr, never stdout.
 //
-// Usage: node scripts/gen-mcp-rows.mjs > /tmp/mcp-rows.yml
+// Usage: node scripts/gen-mcp-rows.mjs [--skip name,name] > /tmp/mcp-rows.yml
 
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const KNOWN_BROKEN = new Set(['grid', 'tabularis']);
+
+// `--skip name,name` — additional server names to drop, e.g. deprecated or
+// out-of-scope servers the caller doesn't want mounted at all.
+function cliSkipNames(argv) {
+  const flag = argv.find((a) => a === '--skip' || a.startsWith('--skip='));
+  if (!flag) return new Set();
+  const value = flag.includes('=') ? flag.slice(flag.indexOf('=') + 1) : argv[argv.indexOf(flag) + 1];
+  if (!value) return new Set();
+  return new Set(value.split(',').map((s) => s.trim()).filter(Boolean));
+}
 
 // Server names already mounted at the home-level patch, so this script
 // never duplicates a row dsh would then fail to compose ("already
@@ -40,7 +64,7 @@ function homeLevelServerNames() {
   return names;
 }
 
-const SKIP = new Set([...homeLevelServerNames(), ...KNOWN_BROKEN]);
+const SKIP = new Set([...homeLevelServerNames(), ...KNOWN_BROKEN, ...cliSkipNames(process.argv.slice(2))]);
 
 // Header -> env var name overrides, keyed by `<serverName>:<header lowercased>`.
 // Add an entry here when the generic derivation below would pick a worse name.
@@ -81,6 +105,23 @@ function headerEnvName(serverName, header) {
 function emitList(arr, indent) {
   const pad = ' '.repeat(indent);
   return arr.map((v) => `${pad}- ${yq(v)}`).join('\n');
+}
+
+// POSIX single-quote shell-quoting for one argument: safe for any byte,
+// embeds a literal single quote as '"'"'.
+function shQuote(v) {
+  return `'${String(v).replace(/'/g, `'"'"'`)}'`;
+}
+
+// `/bin/sh -c '...'` body that runs `command args...` with stderr redirected
+// to this server's own log file instead of inherited by the host TUI, and
+// `exec`s into it so the real command's pid — not an extra `sh` layer — is
+// the direct child dsh-mcp-client supervises and signals on shutdown.
+function buildStdioExecScript(serverName, command, args) {
+  const real = [command, ...(args || [])].map(shQuote).join(' ');
+  const logDir = '${DSH_HOME:-$HOME/.dsh}/logs';
+  const logFile = `${logDir}/mcp-${serverName}.log`;
+  return `mkdir -p "${logDir}" && exec ${real} 2>>"${logFile}"`;
 }
 
 // Every `env`/`headers` entry becomes a `!!js process.env.<NAME>` reference —
@@ -130,13 +171,16 @@ for (const [name, server] of Object.entries(servers)) {
     }
   } else {
     lines.push(`    transport: stdio`);
-    lines.push(`    command: ${yq(server.command)}`);
-    if (server.args && server.args.length) {
-      lines.push(`    args:`);
-      lines.push(emitList(server.args, 6));
-    }
+    lines.push(`    command: /bin/sh`);
+    lines.push(`    args:`);
+    lines.push(emitList(['-c', buildStdioExecScript(name, server.command, server.args)], 6));
+    // DSH_HOME always comes first: dsh-mcp-client's child-env scrub drops
+    // ambient DSH_* names before configured `env` merges on top, so the
+    // `${DSH_HOME:-...}` fallback in the script above needs this re-added
+    // explicitly or it silently uses the wrong log directory.
+    lines.push(`    env:`);
+    lines.push(`      DSH_HOME: ${jsEnvRef('DSH_HOME')}`);
     if (server.env && Object.keys(server.env).length) {
-      lines.push(`    env:`);
       lines.push(emitEnvRefs(server.env, 6, requiredEnvVars));
     }
     if (server.cwd) lines.push(`    cwd: ${yq(server.cwd)}`);
