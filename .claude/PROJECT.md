@@ -9,17 +9,18 @@ Every factual line is a dated observation. The host (`dsh`) is a release candida
 
 ## Project
 
-Six cordis plugins for the DeepSeek Harness (`dsh`) that port a Claude-Code-shaped terminal
+Seven cordis plugins for the DeepSeek Harness (`dsh`) that port a Claude-Code-shaped terminal
 coding workflow onto DeepSeek models only. pnpm workspace, Node >=22, plain JavaScript ESM (no
 TypeScript, no build step — cordis loads `index.js` directly). Packages: `@mdcode-cc/dsh-agents-md`,
 `@mdcode-cc/dsh-task-tool`, `@mdcode-cc/dsh-model-tiers`, `@mdcode-cc/dsh-commands-md`,
-`@mdcode-cc/dsh-plugin-log`, `@mdcode-cc/dsh-hooks-approval`, plus the `cc` profile under
-`profiles/cc/`.
+`@mdcode-cc/dsh-plugin-log`, `@mdcode-cc/dsh-hooks-approval`, `@mdcode-cc/dsh-changes-panel`, plus
+the `cc` profile under `profiles/cc/`.
 
-Implemented and unit-tested; each plugin has been activated on a real headless `dsh` run. 292
-tests pass across the six packages — see each `packages/*/README.md` "Status" line for the
-real-run evidence per package. The `cc` profile's TUI boots clean and runs a real `Task`
-dispatch end to end too. The spec is `docs/DESIGN.md`.
+Implemented and unit-tested; six plugins have each been activated on a real headless `dsh` run.
+353 tests pass across the seven packages (`pnpm test`, 2026-11-03) — see each `packages/*/README.md`
+"Status" line for the real-run evidence per package. `dsh-changes-panel` is a TUI-only seam with
+no headless equivalent — unit-tested only, not yet activated on a real TUI run. The `cc` profile's
+TUI boots clean and runs a real `Task` dispatch end to end too. The spec is `docs/DESIGN.md`.
 
 ## End user
 
@@ -57,9 +58,10 @@ candidate and has moved versions mid-session before.
 
 1. `pnpm test` — `node --test` over `packages/*/test/*.test.js`. This is the gate. It **fails
    loudly when no test file exists** (`FAIL: no test files yet — a run with 0 tests is not a
-   pass`), so a green run always means tests ran. Today it runs 292 tests across the six
-   packages. A green `pnpm test` is real unit-test coverage of each plugin's logic, each also
-   activated on a real headless `dsh` run (see `README.md` and each package's README).
+   pass`), so a green run always means tests ran. Today it runs 353 tests across the seven
+   packages (verified 2026-11-03). A green `pnpm test` is real unit-test coverage of each
+   plugin's logic; six are also activated on a real headless `dsh` run, and `dsh-changes-panel`
+   (TUI-only, no headless equivalent) is not yet (see `README.md` and each package's README).
 2. `bash scripts/doctor.sh` — compares `dsh --version` to every `@deepseek-ai/*` pin in
    `profiles/*/package.json` and reports the plugin peer ranges. Exits 1 on profile drift.
 

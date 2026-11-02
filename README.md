@@ -1,12 +1,13 @@
 # mdcode
 
-Six [cordis](https://github.com/cordiverse/cordis) plugins for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+Seven [cordis](https://github.com/cordiverse/cordis) plugins for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 (`dsh`) that port a Claude-Code-shaped terminal coding workflow onto DeepSeek models only. The
 host already supplies the instructions-file chain, the skill loader, the subagent service and a
 Claude Code hooks bridge; these packages fill the remaining gaps — a global rules file, a
 named-agent roster with per-agent models and tool allowlists, a `Task` delegation tool, markdown
-slash commands, a plugin log sink, and a `PermissionRequest`/`SessionEnd` approval relay — and a
-`cc` profile wires the lot together.
+slash commands, a plugin log sink, a `PermissionRequest`/`SessionEnd` approval relay, and a
+TUI side-panel showing the session's git working tree — and a `cc` profile wires the lot
+together.
 
 ## Requirements
 
@@ -29,7 +30,7 @@ What it does, in order (each step is idempotent, re-run any time):
 3. Installs or upgrades the `dsh` host to the version pinned in `scripts/host.version` (skips if
    `dsh --version` already matches).
 4. Creates `$DSH_HOME/profiles/cc` (`DSH_HOME` defaults to `~/.dsh`): fetches
-   `profiles/cc/cordis.patch.yml`, writes a `package.json` there with the six published
+   `profiles/cc/cordis.patch.yml`, writes a `package.json` there with the seven published
    `@mdcode-cc/*` packages plus the host deps pinned in `profiles/cc/package.json`, writes a
    `pnpm-workspace.yaml` that pre-approves the native deps' build scripts, and runs
    `pnpm install`. An existing `package.json` is backed up with a timestamp first.
@@ -81,8 +82,9 @@ scripts/setup-profile.sh [DSH_HOME]
 | `@mdcode-cc/dsh-commands-md` | 67 | `/intake`, `/build`, `/ship`, `/trace`, `/daily-review` as real slash commands with `$ARGUMENTS` expansion. |
 | `@mdcode-cc/dsh-plugin-log` | 7 | A file sink for `ctx.logger` output, since no shipped profile mounts one. |
 | `@mdcode-cc/dsh-hooks-approval` | 51 | Runs `PermissionRequest` and `SessionEnd` hooks from `~/.claude/settings.json` — the two events the first-party Claude Code hooks bridge does not cover — including an approval-relay hook that can block on an external allow/deny decision. |
+| `@mdcode-cc/dsh-changes-panel` | 52 | A TUI side-panel showing the session cwd's git working tree — staged, unstaged and untracked files with per-file added/deleted line counts — read straight from `git status`/`git diff`, not the host's turn-granular workspace-changes service. |
 
-Workspace total: 301 tests (`pnpm test`, `node --test`, all passing).
+Workspace total: 353 tests (`pnpm test`, `node --test`, all passing).
 
 ## Install
 
@@ -95,6 +97,7 @@ dsh plugin --profile <name> add @mdcode-cc/dsh-model-tiers
 dsh plugin --profile <name> add @mdcode-cc/dsh-commands-md
 dsh plugin --profile <name> add @mdcode-cc/dsh-plugin-log
 dsh plugin --profile <name> add @mdcode-cc/dsh-hooks-approval
+dsh plugin --profile <name> add @mdcode-cc/dsh-changes-panel
 ```
 
 During development, link the package instead of publishing it:
@@ -106,7 +109,7 @@ dsh plugin --profile <name> add @mdcode-cc/dsh-agents-md
 
 ## The `cc` profile
 
-`profiles/cc/` is a worked example that wires all six plugins into one `dsh` profile alongside
+`profiles/cc/` is a worked example that wires all seven plugins into one `dsh` profile alongside
 the host's own agent-preset, skill and MCP-client plugins. It adds:
 
 - one agent preset per `.claude/agents/*.md` file, each with its own model tier and tool mask
@@ -116,17 +119,20 @@ the host's own agent-preset, skill and MCP-client plugins. It adds:
 - a plugin-log file sink
 - the `PermissionRequest`/`SessionEnd` approval relay, reading hook commands from
   `~/.claude/settings.json`
+- a TUI side-panel showing the session cwd's git working tree
 
 See `profiles/cc/cordis.patch.yml` and `profiles/cc/package.json` for the exact row configuration,
 and `docs/DESIGN.md` for the design rationale behind each one.
 
 ## Verification status
 
-All six plugins are unit-tested and each has been activated on a real `dsh --profile headless`
-run. The `Task` tool's dispatch path has additionally been verified end to end inside a real `cc`
-profile TUI session (a child agent picked up a delegated task and returned a result). The
-`PermissionRequest`/`SessionEnd` approval relay has been verified with deny/allow fixture hooks on
-real headless runs; a live round-trip through an external approval daemon has not yet been run.
+All seven plugins are unit-tested. Six have each been activated on a real `dsh --profile
+headless` run. The `Task` tool's dispatch path has additionally been verified end to end inside a
+real `cc` profile TUI session (a child agent picked up a delegated task and returned a result).
+The `PermissionRequest`/`SessionEnd` approval relay has been verified with deny/allow fixture
+hooks on real headless runs; a live round-trip through an external approval daemon has not yet
+been run. `dsh-changes-panel` is a TUI-only seam with no headless equivalent — it is unit-tested
+only; a real `dsh --profile cc` TUI activation has not been run yet.
 
 A draft patch proposing `PermissionRequest`/`SessionEnd` support (plus tool arguments on approval
 requests) for the first-party Claude Code hooks bridge lives in `docs/upstream/` as a contribution

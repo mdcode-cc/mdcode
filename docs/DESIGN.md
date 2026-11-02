@@ -1,6 +1,6 @@
 # mdcode — design spec
 
-Six cordis plugins that port a Claude Code workflow onto the DeepSeek Harness with DeepSeek
+Seven cordis plugins that port a Claude Code workflow onto the DeepSeek Harness with DeepSeek
 models only.
 
 **Host read:** `/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`.
@@ -9,11 +9,13 @@ concurrent upgrade). Every seam cited below was re-read on rc.5; where rc.2 and 
 difference is called out, because two of them are material. Package paths in citations are
 relative to that directory. `dsh --version` → `0.2.1-rc.5`.
 
-**Status: implemented.** All six plugins are built and unit-tested (292 tests across the
-workspace), and each has been activated on a real `dsh --profile headless` run (`dsh-commands-md`
-by unit tests plus a read-only parse of the real command/skill files, not a live boot; see its
-README — and `dsh-hooks-approval`'s `PermissionRequest` relay is verified with deny/allow fixture
-hooks, with a live round-trip through an external approval daemon still pending, see its README).
+**Status: implemented.** All seven plugins are built and unit-tested (353 tests across the
+workspace, `pnpm test`, 2026-11-03). Six have been activated on a real `dsh --profile headless`
+run (`dsh-commands-md` by unit tests plus a read-only parse of the real command/skill files, not
+a live boot; see its README — and `dsh-hooks-approval`'s `PermissionRequest` relay is verified
+with deny/allow fixture hooks, with a live round-trip through an external approval daemon still
+pending, see its README). `dsh-changes-panel` is a TUI-panel seam with no headless equivalent —
+unit-tested only, with a real `dsh --profile cc` TUI activation not yet run, see its README.
 Per-package test counts and real-run evidence: `README.md`.
 
 ---
@@ -39,7 +41,7 @@ Reading the install first, so we build only what is missing:
 | DeepSeek route | `dsh-llm-deepseek` + `-api-key`, Anthropic dialect at `https://api.deepseek.com/anthropic` | yes |
 | plugin logs → a file sink | no shipped profile mounts a logger exporter | **no** — needed (§4.5) |
 
-So: six plugins, not forty.
+So: seven plugins, not forty.
 
 ### Profile rules
 
@@ -172,7 +174,7 @@ route for every request, and an alias resolving differently than expected is inv
 
 ---
 
-## 4. The six plugins
+## 4. The seven plugins
 
 Full spec per plugin — every config key, every failure mode, the full test plan — is in its own
 `packages/*/README.md`. Condensed here to purpose, seams and size.
@@ -224,6 +226,18 @@ from `~/.claude/settings.json`. Seams:
 `session/disposed`, a `tools/pre-execute`/`tools/post-execute` tool-input cache,
 `dsh-hook-protocol`'s `runHook`. See `packages/dsh-hooks-approval/README.md`.
 
+### 4.7 `@mdcode-cc/dsh-changes-panel` — 498 lines (`index.js` 68 + `lib/*.js` 429)
+
+Registers a panel in the dsh-TUI side-panel column showing the git working tree of the
+session's cwd: staged, unstaged and untracked files with per-file added/deleted line counts. Reads
+git directly (`git status --porcelain=v1 -z --branch --untracked-files=all` plus `git diff
+--numstat -z` and `git diff --cached --numstat -z`, run concurrently) rather than the host's
+`@deepseek-ai/dsh-workspace-changes` service, which is composed only by `@deepseek-ai/dsh-web-app`
+(absent from the `cc` profile's `dsh-base`/`dsh-tui` composition) and is turn-granular with no
+staged/unstaged split. Seam: `ctx.tuiPanels` (dsh-TUI 0.18.0's `TuiPanelRuntime`), reached via
+`ctx.inject(['tuiPanels'], cb)` — a silent no-op when no TUI is composed. See
+`packages/dsh-changes-panel/README.md`.
+
 ---
 
 ## 5. Model alias table
@@ -260,7 +274,7 @@ account grant and "neither route falls back to the other".
 |---|---|
 | `settings.json` `hooks` | `dsh-hooks-claude-code` is published at `0.2.1-rc.5` but is a **devDependency of the host `dsh` package**, so it is not vendored into the install tree (a `find` for `*hooks*` under the host's own `node_modules/@deepseek-ai` returns only an unrelated `standardwebhooks`). Resolved (Q4): add it to the profile explicitly with `dsh plugin --profile cc add @deepseek-ai/dsh-hooks-claude-code@0.2.1-rc.5`. Once added, its supported-event set still leaves some hook types unreachable — see the next row. |
 | Upstreaming `PermissionRequest`/tool-argument support into the first-party bridge | `docs/upstream/` holds a draft patch adding `PermissionRequest`/`SessionEnd` to `dsh-hooks-claude-code`'s bridged event set, plus tool arguments on approval requests — the two gaps `dsh-hooks-approval` (§4.6) works around from outside the bridge. It is a contribution candidate only: not applied to this repo and not submitted upstream. |
-| `PreCompact` hook | Not in the rc.2 bridge's supported set either. `compaction/*` events exist on the host, so a native plugin could do it — out of scope for six packages. |
+| `PreCompact` hook | Not in the rc.2 bridge's supported set either. `compaction/*` events exist on the host, so a native plugin could do it — out of scope for seven packages. |
 | `@path` imports inside `CLAUDE.md` | `dsh-agent-instructions` renders the file chain byte-for-byte with a byte budget; it has no import directive. A `@path` line would reach the model as literal text, which is worse than absent. |
 | `/rewind` | Needs checkpoint + restore over the session log. `dsh-session-checkpoint-policy` exists; building a rewind UI is a project, not a plugin. |
 | statusline | The TUI's `StatusBarConfig` field set is fixed and not extensible from a plugin; only a keyed `ctx.tuiStatus` line is addable (the mechanism a first-party balance-status plugin uses). A shell-command statusline has no seam. |
