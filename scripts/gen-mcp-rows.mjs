@@ -178,7 +178,7 @@ for (const [name, server] of Object.entries(servers)) {
     // always a string even when DSH_HOME is not exported; dsh-mcp-client's child-env scrub
     // drops ambient DSH_* names, and configured `env` merges on top.
     lines.push(`    env:`);
-    lines.push(`      DSH_HOME: ${jsEnvRef('DSH_HOME')}`);
+    lines.push(`      MDCODE_LOG_DIR: !!js "(process.env.DSH_HOME || process.env.HOME + '/.dsh') + '/logs'"`);
     if (server.env && Object.keys(server.env).length) {
       lines.push(emitEnvRefs(server.env, 6, requiredEnvVars));
     }
