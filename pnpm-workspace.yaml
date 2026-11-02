@@ -13,3 +13,6 @@ packages:
 # (dsh-tui@0.18.0, published 2026-11-01) and ERR_PNPM_IGNORED_BUILDS here —
 # dropping it fixes both without touching policy.
 minimumReleaseAge: 0
+
+# resolve @mdcode-cc/* ranges to the workspace copies instead of the registry
+linkWorkspacePackages: true

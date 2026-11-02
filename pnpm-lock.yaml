@@ -136,7 +136,7 @@ importers:
         specifier: 0.2.1-rc.5
         version: 0.2.1-rc.5(838c99649576d6611fa9994cb21a266c)
       '@mdcode-cc/dsh-agents-md':
-        specifier: workspace:^
+        specifier: ^0.1.1
         version: link:../dsh-agents-md
     devDependencies:
       '@deepseek-ai/schemastery':
