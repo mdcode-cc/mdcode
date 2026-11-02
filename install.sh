@@ -110,7 +110,8 @@ else
   IFS= read -rs DEEPSEEK_KEY_INPUT < /dev/tty
   printf '\n' > /dev/tty
   if [ -z "$DEEPSEEK_KEY_INPUT" ]; then
-    echo "no key entered, skipping"
+    echo "no key entered, skipping. Add it later with:"
+    echo "  echo DEEPSEEK_API_KEY=sk-... >> $DSH_HOME/.env   (or export it before launching)"
   else
     mkdir -p "$DSH_HOME"
     touch "$DSH_HOME/.env"
