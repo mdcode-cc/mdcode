@@ -4,8 +4,8 @@
   "private": true,
   "description": "The cc profile: dsh-base + the TUI front-end + the six mdcode plugins.",
   "dependencies": {
-    "@deepseek-ai/dsh-hook-protocol": "0.2.1-rc.5",
-    "@deepseek-ai/dsh-hooks-claude-code": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-hook-protocol": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-hooks-claude-code": "0.2.2-rc.1",
     "@deepseek-harness-tui/dsh-tui": "0.18.0",
     "@mdcode-cc/dsh-agents-md": "link:../../packages/dsh-agents-md",
     "@mdcode-cc/dsh-changes-panel": "link:../../packages/dsh-changes-panel",
